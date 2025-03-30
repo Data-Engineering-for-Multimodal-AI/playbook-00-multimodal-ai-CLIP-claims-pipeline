@@ -9,6 +9,7 @@ import numpy as np
 from typing import Optional, List, Dict, Any
 import logging
 import os
+import uvicorn
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
