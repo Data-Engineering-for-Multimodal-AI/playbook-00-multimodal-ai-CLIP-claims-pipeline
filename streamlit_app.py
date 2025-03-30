@@ -213,8 +213,13 @@ def get_embedding(text=None, image=None):
             if hasattr(f[1], 'close'):
                 f[1].close()
 
-def search_by_vector(client, embedding, limit=5):
+def search_by_vector(embedding, limit=5):
     """Search for claims using vector similarity"""
+    client = connect_to_weaviate()
+    if not client:
+        st.error("Failed to connect to Weaviate")
+        return []
+        
     try:
         # Use a more permissive certainty value for pet matching
         vector_query = client.query.get(
@@ -236,63 +241,75 @@ def search_by_vector(client, embedding, limit=5):
         st.error(f"Error in vector search: {e}")
         return []
 
-def search_by_text(client, query_text, limit=5):
+def search_by_text(query_text, limit=5, where_filter=None):
     """Search for claims using text matching"""
+    client = connect_to_weaviate()
+    if not client:
+        st.error("Failed to connect to Weaviate")
+        return []
+        
     try:
-        # Default text search across multiple fields
-        where_filter = {
-            "operator": "Or",
-            "operands": [
-                {
-                    "path": ["claim_note"],
-                    "operator": "Like",
-                    "valueText": f"*{query_text}*"
-                },
-                {
-                    "path": ["pet_name"],
-                    "operator": "Like",
-                    "valueText": f"*{query_text}*"
-                },
-                {
-                    "path": ["breed"],
-                    "operator": "Like",
-                    "valueText": f"*{query_text}*"
-                },
-                {
-                    "path": ["clinic"],
-                    "operator": "Like",
-                    "valueText": f"*{query_text}*"
-                }
-            ]
-        }
-        
-        # Special case for coverage types - check exact field matches
-        if query_text.lower() == "dental":
-            where_filter = {
-                "path": ["dental_covered"],
-                "operator": "Equal",
-                "valueBoolean": True
-            }
-        elif query_text.lower() == "surgery":
-            where_filter = {
-                "path": ["surgery_covered"],
-                "operator": "Equal",
-                "valueBoolean": True
-            }
-        elif query_text.lower() in ["x-ray", "xray"]:
-            where_filter = {
-                "path": ["xray_covered"],
-                "operator": "Equal",
-                "valueBoolean": True
-            }
-        
-        # Execute the search
-        text_query = client.query.get(
+        # Create base query
+        query_builder = client.query.get(
             "ClaimDocument", 
             ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
              "breed", "clinic", "deductible", "co_pay_percent", 
              "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
-        ).with_where(where_filter).with_limit(limit).do()
+        )
+        
+        # Use provided filter or create a default one
+        if where_filter:
+            query_builder = query_builder.with_where(where_filter)
+        else:
+            # Default text search across multiple fields
+            query_builder = query_builder.with_where({
+                "operator": "Or",
+                "operands": [
+                    {
+                        "path": ["claim_note"],
+                        "operator": "Like",
+                        "valueText": f"*{query_text}*"
+                    },
+                    {
+                        "path": ["pet_name"],
+                        "operator": "Like",
+                        "valueText": f"*{query_text}*"
+                    },
+                    {
+                        "path": ["breed"],
+                        "operator": "Like",
+                        "valueText": f"*{query_text}*"
+                    },
+                    {
+                        "path": ["clinic"],
+                        "operator": "Like",
+                        "valueText": f"*{query_text}*"
+                    }
+                ]
+            })
+        
+            # Special case for coverage types - check exact field matches
+            if query_text.lower() == "dental":
+                query_builder = query_builder.with_where({
+                    "path": ["dental_covered"],
+                    "operator": "Equal",
+                    "valueBoolean": True
+                })
+            elif query_text.lower() == "surgery":
+                query_builder = query_builder.with_where({
+                    "path": ["surgery_covered"],
+                    "operator": "Equal",
+                    "valueBoolean": True
+                })
+            elif query_text.lower() in ["x-ray", "xray"]:
+                query_builder = query_builder.with_where({
+                    "path": ["xray_covered"],
+                    "operator": "Equal",
+                    "valueBoolean": True
+                })
+        
+        # Execute the query
+        text_query = query_builder.with_limit(limit).do()
         
         if "data" in text_query and "Get" in text_query["data"] and "ClaimDocument" in text_query["data"]["Get"]:
             results = text_query["data"]["Get"]["ClaimDocument"]
@@ -302,6 +319,29 @@ def search_by_text(client, query_text, limit=5):
     except Exception as e:
         st.error(f"Error in text search: {e}")
         return []
+
+def combine_search_results(vector_results, text_results, limit=5):
+    """Combine vector and text search results, removing duplicates"""
+    seen_claim_ids = set()
+    combined_results = []
+    
+    # Add vector results first (they're typically more relevant)
+    for result in vector_results:
+        if result.get("claim_id") and result["claim_id"] not in seen_claim_ids:
+            seen_claim_ids.add(result["claim_id"])
+            combined_results.append(result)
+    
+    # Add text results that aren't duplicates
+    for result in text_results:
+        if result.get("claim_id") and result["claim_id"] not in seen_claim_ids:
+            seen_claim_ids.add(result["claim_id"])
+            combined_results.append(result)
+            
+            # Stop if we have enough results
+            if len(combined_results) >= limit:
+                break
+    
+    return combined_results[:limit]  # Return only up to limit results
 
 def search_similar_claims(query_text=None, query_image=None, limit=3):
     """Search for similar claims based on text and/or image."""
@@ -519,7 +559,7 @@ def run_search(client):
 
 # Main application
 def main():
-    st.set_page_config(page_title="🐾 PetInsure Claims Search", page_icon="🔍", layout="wide")
+    # The page config is now set at the top of the file
     st.title("🐾 PetInsure Claims Search")
     
     # Initialize Weaviate client

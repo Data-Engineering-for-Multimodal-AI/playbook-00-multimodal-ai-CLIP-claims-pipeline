@@ -112,7 +112,8 @@ async def embed_from_file(
     return {
         "text_embedding": text_embedding,
         "image_embedding": image_embedding,
-        "combined_embedding": combined_embedding
+        "combined_embedding": combined_embedding,
+        "embedding": combined_embedding if combined_embedding else text_embedding
     }
 
 if __name__ == "__main__":
