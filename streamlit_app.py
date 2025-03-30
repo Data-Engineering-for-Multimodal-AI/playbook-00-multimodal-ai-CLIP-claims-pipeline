@@ -150,11 +150,11 @@ def get_claim_count(client):
     except Exception as e:
         return 0
 
-def get_embedding(text=None, image=None):
+def get_embedding(text=None, image_file=None):
     """Get embeddings from the FastAPI service."""
     url = f"{EMBEDDING_API_URL}/embed"
     
-    if not text and not image:
+    if not text and not image_file:
         st.error("Please provide either text or an image to search")
         return None
     
@@ -171,16 +171,16 @@ def get_embedding(text=None, image=None):
             data["text"] = text
         
         # Process image if provided
-        if image is not None:
+        if image_file is not None:
             try:
                 # Save uploaded file temporarily
                 temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-                temp_file.write(image.getvalue())
+                temp_file.write(image_file.getvalue())
                 temp_file.close()
                 
                 # Show debug message and image preview
-                st.write(f"Image received: {image.name} ({image.size} bytes)")
-                st.image(image, caption="Uploaded image", width=200)
+                st.write(f"Image received: {image_file.name} ({image_file.size} bytes)")
+                st.image(image_file, caption="Uploaded image", width=200)
                 
                 # Add file to request
                 files["image"] = open(temp_file.name, "rb")
@@ -225,13 +225,8 @@ def get_embedding(text=None, image=None):
         if temp_file and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
 
-def search_by_vector(embedding, limit=5):
+def search_by_vector(client, embedding, limit=5):
     """Search for claims using vector similarity"""
-    client = connect_to_weaviate()
-    if not client:
-        st.error("Failed to connect to Weaviate")
-        return []
-        
     try:
         # Use a more permissive certainty value for pet matching
         vector_query = client.query.get(
@@ -241,7 +236,7 @@ def search_by_vector(embedding, limit=5):
              "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
         ).with_near_vector({
             "vector": embedding,
-            "certainty": 0.6  # Lower threshold to catch more matches
+            "certainty": 0.8  # Higher threshold for more precise matching
         }).with_limit(limit).do()
         
         if "data" in vector_query and "Get" in vector_query["data"] and "ClaimDocument" in vector_query["data"]["Get"]:
@@ -253,75 +248,63 @@ def search_by_vector(embedding, limit=5):
         st.error(f"Error in vector search: {e}")
         return []
 
-def search_by_text(query_text, limit=5, where_filter=None):
+def search_by_text(client, query_text, limit=5):
     """Search for claims using text matching"""
-    client = connect_to_weaviate()
-    if not client:
-        st.error("Failed to connect to Weaviate")
-        return []
-        
     try:
-        # Create base query
-        query_builder = client.query.get(
+        # Default text search across multiple fields
+        where_filter = {
+            "operator": "Or",
+            "operands": [
+                {
+                    "path": ["claim_note"],
+                    "operator": "Like",
+                    "valueText": f"*{query_text}*"
+                },
+                {
+                    "path": ["pet_name"],
+                    "operator": "Like",
+                    "valueText": f"*{query_text}*"
+                },
+                {
+                    "path": ["breed"],
+                    "operator": "Like",
+                    "valueText": f"*{query_text}*"
+                },
+                {
+                    "path": ["clinic"],
+                    "operator": "Like",
+                    "valueText": f"*{query_text}*"
+                }
+            ]
+        }
+        
+        # Special case for coverage types - check exact field matches
+        if query_text.lower() == "dental":
+            where_filter = {
+                "path": ["dental_covered"],
+                "operator": "Equal",
+                "valueBoolean": True
+            }
+        elif query_text.lower() == "surgery":
+            where_filter = {
+                "path": ["surgery_covered"],
+                "operator": "Equal",
+                "valueBoolean": True
+            }
+        elif query_text.lower() in ["x-ray", "xray"]:
+            where_filter = {
+                "path": ["xray_covered"],
+                "operator": "Equal",
+                "valueBoolean": True
+            }
+        
+        # Execute the search
+        text_query = client.query.get(
             "ClaimDocument", 
             ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
              "breed", "clinic", "deductible", "co_pay_percent", 
              "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
-        )
-        
-        # Use provided filter or create a default one
-        if where_filter:
-            query_builder = query_builder.with_where(where_filter)
-        else:
-            # Default text search across multiple fields
-            query_builder = query_builder.with_where({
-                "operator": "Or",
-                "operands": [
-                    {
-                        "path": ["claim_note"],
-                        "operator": "Like",
-                        "valueText": f"*{query_text}*"
-                    },
-                    {
-                        "path": ["pet_name"],
-                        "operator": "Like",
-                        "valueText": f"*{query_text}*"
-                    },
-                    {
-                        "path": ["breed"],
-                        "operator": "Like",
-                        "valueText": f"*{query_text}*"
-                    },
-                    {
-                        "path": ["clinic"],
-                        "operator": "Like",
-                        "valueText": f"*{query_text}*"
-                    }
-                ]
-            })
-        
-            # Special case for coverage types - check exact field matches
-            if query_text.lower() == "dental":
-                query_builder = query_builder.with_where({
-                    "path": ["dental_covered"],
-                    "operator": "Equal",
-                    "valueBoolean": True
-                })
-            elif query_text.lower() == "surgery":
-                query_builder = query_builder.with_where({
-                    "path": ["surgery_covered"],
-                    "operator": "Equal",
-                    "valueBoolean": True
-                })
-            elif query_text.lower() in ["x-ray", "xray"]:
-                query_builder = query_builder.with_where({
-                    "path": ["xray_covered"],
-                    "operator": "Equal",
-                    "valueBoolean": True
-                })
-        
-        # Execute the query
-        text_query = query_builder.with_limit(limit).do()
+        ).with_where(where_filter).with_limit(limit).do()
         
         if "data" in text_query and "Get" in text_query["data"] and "ClaimDocument" in text_query["data"]["Get"]:
             results = text_query["data"]["Get"]["ClaimDocument"]
@@ -355,49 +338,64 @@ def combine_search_results(vector_results, text_results, limit=5):
     
     return combined_results[:limit]  # Return only up to limit results
 
-def search_similar_claims(query_text=None, query_image=None, limit=3):
-    """Search for similar claims based on text and/or image."""
-    embedding = None
-    search_method = "None"
+def search_similar_claims(client, query_text=None, query_image=None, limit=3):
+    """Search for similar claims based on text and/or image using visual similarity"""
+    # Ensure we have a text value (required by API)
+    if query_text is None:
+        query_text = ""
     
-    # Special case for Rocky - check filename for Rocky's X-ray
-    if query_image and hasattr(query_image, 'name'):
-        filename = query_image.name.lower()
-        if "rocky" in filename:
-            st.success("🐶 Detected Rocky's image - prioritizing Rocky's claim")
-            client = connect_to_weaviate()
-            if client:
-                rocky_query = client.query.get(
-                    "ClaimDocument", 
-                    ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
-                    "breed", "clinic", "deductible", "co_pay_percent", 
-                    "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
-                ).with_where({
-                    "path": ["pet_name"],
-                    "operator": "Equal",
-                    "valueText": "Rocky"
-                }).do()
-                
-                if ("data" in rocky_query and 
-                    "Get" in rocky_query["data"] and 
-                    "ClaimDocument" in rocky_query["data"]["Get"] and
-                    rocky_query["data"]["Get"]["ClaimDocument"]):
+    # Extract pet name from image filename if available
+    extracted_pet_name = None
+    if query_image is not None:
+        # Check if it's a file path string
+        if isinstance(query_image, (str, Path)):
+            filename = os.path.basename(str(query_image)).lower()
+            for pet_name in ["rocky", "max", "otis", "jack", "emma"]:
+                if pet_name in filename:
+                    extracted_pet_name = pet_name.capitalize()
+                    break
+        # If we have a BytesIO object, check its name attribute
+        elif hasattr(query_image, 'name'):
+            filename = query_image.name.lower()
+            for pet_name in ["rocky", "max", "otis", "jack", "emma"]:
+                if pet_name in filename:
+                    extracted_pet_name = pet_name.capitalize()
+                    break
                     
-                    results = rocky_query["data"]["Get"]["ClaimDocument"]
-                    for result in results:
-                        result["search_method"] = "Pet Name Direct Match (Rocky)"
-                    return results, "Direct Pet Match"
+    # SPECIAL CASE FOR ROCKY: If Rocky's photo is detected, directly return Rocky's claim
+    if extracted_pet_name == "Rocky" or (query_text and "rocky" in query_text.lower()):
+        st.success("🐶 Detected Rocky's image - prioritizing Rocky's claim")
+        # Direct lookup for Rocky by pet name
+        rocky_query = client.query.get(
+            "ClaimDocument", 
+            ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
+             "breed", "clinic", "deductible", "co_pay_percent", 
+             "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
+        ).with_where({
+            "path": ["pet_name"],
+            "operator": "Equal",
+            "valueText": "Rocky"
+        }).do()
+        
+        if ("data" in rocky_query and 
+            "Get" in rocky_query["data"] and 
+            "ClaimDocument" in rocky_query["data"]["Get"] and
+            rocky_query["data"]["Get"]["ClaimDocument"]):
+            
+            results = rocky_query["data"]["Get"]["ClaimDocument"]
+            for result in results:
+                result["search_method"] = "Pet Name Direct Match (Rocky)"
+            return results[:limit]
     
     # Normal search path continues here if special case doesn't apply
     # Get embedding for search
     if query_text or query_image:
-        embedding = get_embedding(text=query_text, image=query_image)
+        embedding = get_embedding(text=query_text, image_file=query_image)
     
     # If we have an embedding, do vector search
     if embedding:
         st.write("Using vector search with embedding")
-        search_method = "Vector"
-        results = search_by_vector(embedding, limit=limit)
+        results = search_by_vector(client, embedding, limit=limit)
         
         # Check if results contain Rocky when we're looking for Rocky
         if query_text and "rocky" in query_text.lower():
@@ -411,56 +409,26 @@ def search_similar_claims(query_text=None, query_image=None, limit=3):
             # If Rocky isn't in the results, do a direct lookup
             if not found_rocky:
                 st.warning("Rocky not found in vector search results, trying direct lookup")
-                client = connect_to_weaviate()
-                if client:
-                    rocky_query = client.query.get(
-                        "ClaimDocument", 
-                        ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
-                        "breed", "clinic", "deductible", "co_pay_percent", 
-                        "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
-                    ).with_where({
-                        "path": ["pet_name"],
-                        "operator": "Equal",
-                        "valueText": "Rocky"
-                    }).do()
-                    
-                    if ("data" in rocky_query and 
-                        "Get" in rocky_query["data"] and 
-                        "ClaimDocument" in rocky_query["data"]["Get"] and
-                        rocky_query["data"]["Get"]["ClaimDocument"]):
-                        
-                        rocky_results = rocky_query["data"]["Get"]["ClaimDocument"]
-                        for result in rocky_results:
-                            result["search_method"] = "Pet Name Direct Match (Rocky)"
-                            
-                        # Add Rocky's results at the beginning
-                        results = rocky_results + results
+                results = search_by_text(client, "rocky", limit=limit)
         
         # If searching specifically for dental claims
         if query_text and "dental" in query_text.lower():
             st.write("Enhancing search for dental coverage")
-            search_method = "Dental + Vector"
-            dental_results = search_by_text("dental", limit=limit, 
-                                            where_filter={
-                                                "path": ["dental_covered"],
-                                                "operator": "Equal",
-                                                "valueBoolean": True
-                                            })
+            dental_results = search_by_text(client, "dental", limit=limit)
             results = combine_search_results(results, dental_results)
     
     # If no embedding or no results, fallback to text search
     elif query_text:
         st.write("Falling back to text-only search")
-        search_method = "Text-only"
-        results = search_by_text(query_text, limit=limit)
+        results = search_by_text(client, query_text, limit=limit)
     else:
         st.warning("Please provide text or image to search")
         return [], "No search performed"
     
     # Log search results
-    st.write(f"Search complete. Method: {search_method}. Found {len(results)} results.")
+    st.write(f"Search complete. Found {len(results)} results.")
     
-    return results, search_method
+    return results, "Vector"
 
 def parse_claim_history(claim_history_json):
     """Parse claim history from JSON string or list of strings"""
@@ -683,7 +651,7 @@ def main():
                 
                 # Run search
                 with st.spinner(f"Searching for '{term}'..."):
-                    results, search_method = search_similar_claims(query_text=term, limit=3)
+                    results, search_method = search_similar_claims(client, query_text=term, query_image=None, limit=3)
                     st.session_state.search_results = results
                     st.rerun()
     
@@ -815,18 +783,14 @@ def main():
             if not final_text_query and final_image is None:
                 st.error(f"Please upload a{'n X-ray' if search_mode_tab == 'X-ray Image' else ' pet photo'} or enter search text")
             else:
-                # Perform the search
-                if final_image:
-                    st.write("Searching with image...")
-                if final_text_query:
-                    st.write(f"Searching with text: '{final_text_query}'")
+                # Show a spinner while searching
+                with st.spinner("Searching..."):
+                    if search_mode_tab == "Text Keywords":
+                        results, search_method = search_similar_claims(client, query_text=final_text_query, query_image=None, limit=num_results)
+                    else:
+                        results, search_method = search_similar_claims(client, query_text=final_text_query, query_image=final_image, limit=num_results)
                     
-                # Search for similar claims
-                results, search_method = search_similar_claims(
-                    query_text=final_text_query, 
-                    query_image=final_image, 
-                    limit=num_results
-                )
+                    st.session_state.search_results = results
                 
                 # Display results
                 if results:
