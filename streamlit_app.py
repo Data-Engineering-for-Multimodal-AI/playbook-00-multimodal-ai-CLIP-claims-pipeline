@@ -579,28 +579,112 @@ def main():
     claim_count = get_claim_count(client)
     st.write(f"📊 Database contains {claim_count} claims")
     
-    # Search form
-    with st.form("search_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            query_text = st.text_input("Search by keywords:", placeholder="Enter search terms...")
-        
-        with col2:
-            query_image = st.file_uploader("Upload X-ray or pet photo:", type=["jpg", "jpeg", "png"])
-        
-        num_results = st.slider("Maximum number of results:", min_value=1, max_value=10, value=3)
-        submitted = st.form_submit_button("🔍 Search")
+    # Create tabs for search modes
+    search_mode_tab = st.radio(
+        "Search method",
+        ["Text Keywords", "Pet Photo", "X-ray Image"],
+        horizontal=True,
+        key="search_method",
+        on_change=reset_search_state
+    )
     
-    # Process search when form is submitted
-    if submitted:
+    # Store the search mode in session state
+    st.session_state.search_mode = search_mode_tab
+    
+    # Container for quick search buttons
+    if search_mode_tab == "Text Keywords":
+        # Quick search buttons - OUTSIDE any form
+        st.write("Try searching for:")
+        quick_search_cols = st.columns(5)
+        sample_terms = ["cough", "arthritis", "fracture", "dental", "surgery"]
+        
+        for i, term in enumerate(sample_terms):
+            if quick_search_cols[i].button(term, key=f"quick_{term}"):
+                st.session_state.text_query = term
+                st.session_state.search_executed = True
+                
+                # Run search
+                with st.spinner(f"Searching for '{term}'..."):
+                    results, search_method = search_similar_claims(query_text=term, limit=3)
+                    st.session_state.search_results = results
+                    st.rerun()
+    
+    # Begin search form area
+    with st.form(key="search_form"):
+        if search_mode_tab == "Text Keywords":
+            # Text search
+            text_query = st.text_input(
+                "Enter search keywords",
+                value=st.session_state.get("text_query", ""),
+                key="text_input"
+            )
+            query_image = None
+            
+        elif search_mode_tab == "Pet Photo":
+            # Pet photo search
+            col1, col2 = st.columns([3, 2])
+            
+            with col1:
+                text_query = st.text_input("Pet name or condition (optional):", placeholder="e.g., Rocky, limping")
+                query_image = st.file_uploader("Upload a pet photo", type=["jpg", "jpeg", "png"], key="pet_photo_uploader")
+            
+            with col2:
+                # Sample image selection
+                use_sample = st.checkbox("Use sample pet photo instead", key="use_pet_sample")
+                
+                if use_sample:
+                    sample_image_path = str(PET_PHOTOS_DIR / "emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg")
+                    st.session_state.pet_photo_path = sample_image_path
+                    st.image(sample_image_path, caption="Sample Pet Photo", use_container_width=True)
+                    
+                    # Create a BytesIO object for the sample
+                    if st.form_submit_button("Use this sample"):
+                        with open(sample_image_path, "rb") as f:
+                            sample_file_bytes = f.read()
+                        from io import BytesIO
+                        query_image = BytesIO(sample_file_bytes)
+                        query_image.name = os.path.basename(sample_image_path)
+            
+        else:  # X-ray Image
+            # X-ray search
+            col1, col2 = st.columns([3, 2])
+            
+            with col1:
+                text_query = st.text_input("Condition (optional):", placeholder="e.g., fracture, arthritis")
+                query_image = st.file_uploader("Upload an X-ray image", type=["jpg", "jpeg", "png", "dicom", "dcm"], key="xray_uploader")
+            
+            with col2:
+                # Sample image selection
+                use_sample = st.checkbox("Use sample X-ray instead", key="use_xray_sample")
+                
+                if use_sample:
+                    sample_image_path = str(XRAYS_DIR / "emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png") 
+                    st.session_state.xray_path = sample_image_path
+                    st.image(sample_image_path, caption="Sample X-ray", use_container_width=True)
+                    
+                    # Create a BytesIO object for the sample
+                    if st.form_submit_button("Use this sample"):
+                        with open(sample_image_path, "rb") as f:
+                            sample_file_bytes = f.read()
+                        from io import BytesIO
+                        query_image = BytesIO(sample_file_bytes)
+                        query_image.name = os.path.basename(sample_image_path)
+        
+        # Number of results to return
+        num_results = st.slider("Number of results", min_value=1, max_value=10, value=3)
+        
+        # Submit button
+        submit_button = st.form_submit_button("🔍 Search", use_container_width=True)
+    
+    # Handle form submission
+    if submit_button:
         with st.spinner("Searching for matching claims..."):
-            if not query_text and query_image is None:
-                st.warning("Please enter search text or upload an image")
+            if (search_mode_tab in ["Pet Photo", "X-ray Image"] and not query_image) and not text_query:
+                st.error(f"Please upload a{'n X-ray' if search_mode_tab == 'X-ray Image' else ' pet photo'} or enter search text")
             else:
                 # Search for similar claims
                 results, search_method = search_similar_claims(
-                    query_text=query_text, 
+                    query_text=text_query, 
                     query_image=query_image, 
                     limit=num_results
                 )
@@ -612,6 +696,29 @@ def main():
                         render_result(result)
                 else:
                     st.warning("No matching claims found. Try different search terms or upload a different image.")
+                    
+    # Display admin tools
+    with st.expander("Admin Tools", expanded=False):
+        st.subheader("Database Management")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Reingest Claims Data"):
+                with st.spinner("Reingesting claims data..."):
+                    try:
+                        os.system("python store_with_embedding.py")
+                        st.success("Claims data reingested successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error reingesting claims data: {e}")
+        with col2:
+            if st.button("Reset Weaviate Schema"):
+                with st.spinner("Resetting Weaviate schema..."):
+                    try:
+                        os.system("python weaviate_schema.py")
+                        st.success("Weaviate schema reset successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error resetting Weaviate schema: {e}")
 
 if __name__ == "__main__":
     main() 
