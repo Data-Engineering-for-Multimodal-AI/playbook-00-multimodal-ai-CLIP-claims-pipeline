@@ -1,21 +1,24 @@
 import streamlit as st
-import weaviate
+import os
 import requests
 import json
-import os
-from pathlib import Path
 import pandas as pd
-from PIL import Image
-import time
 import uuid
 import re
 import tempfile
+from pathlib import Path
+import weaviate
+from PIL import Image
+import time
+
+# Set page config at the very beginning
+st.set_page_config(page_title="🐾 PetInsure Claims Search", page_icon="🔍", layout="wide")
 
 # Configuration
 DATA_DIR = Path("data")
 XRAYS_DIR = DATA_DIR / "PetXrays"
 PET_PHOTOS_DIR = DATA_DIR / "PetPhotos"
-EMBEDDING_API_URL = "http://localhost:8001/embed"
+EMBEDDING_API_URL = "http://localhost:8001"
 WEAVIATE_URL = "http://localhost:8080"
 
 # Initialize session state for storing selections
@@ -32,19 +35,11 @@ if "pet_photo_path" not in st.session_state:
 if "xray_path" not in st.session_state:
     st.session_state.xray_path = ""
 if "search_results" not in st.session_state:
-    st.session_state.search_results = None
+    st.session_state.search_results = []
 if "search_executed" not in st.session_state:
     st.session_state.search_executed = False
 
 # Page configuration
-st.set_page_config(
-    page_title="🐾 PetInsure Claims Search",
-    page_icon="🔍",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# Custom CSS for improved appearance
 st.markdown("""
 <style>
     .main .block-container {
@@ -165,53 +160,70 @@ def get_embedding(text=None, image=None):
     
     files = {}
     data = {}
-    
-    if text:
-        data["text"] = text
-    
     temp_file = None
-    try:
-        if image is not None:
-            # Log the image file info for debugging
-            st.write(f"Processing image: {image.name}, size: {image.size}, type: {image.type}")
-            
-            # Save the uploaded image to a temporary file
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-            temp_file.write(image.getvalue())
-            temp_file.close()
-            
-            # Add the image file to the request
-            files["image"] = (image.name, open(temp_file.name, "rb"), image.type)
     
-        # Log the API request for debugging
-        st.write(f"Sending request to {url} with data: {data} and files: {list(files.keys())}")
+    try:
+        # Always include a description field (required by API)
+        data["description"] = text if text else ""
+        
+        # Add the text parameter as well for newer API versions
+        if text:
+            data["text"] = text
+        
+        # Process image if provided
+        if image is not None:
+            try:
+                # Save uploaded file temporarily
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                temp_file.write(image.getvalue())
+                temp_file.close()
+                
+                # Show debug message and image preview
+                st.write(f"Image received: {image.name} ({image.size} bytes)")
+                st.image(image, caption="Uploaded image", width=200)
+                
+                # Add file to request
+                files["image"] = open(temp_file.name, "rb")
+            except Exception as e:
+                st.error(f"Error processing image: {e}")
         
         # Make the API request
-        if files:
-            response = requests.post(url, data=data, files=files)
-        else:
-            response = requests.post(url, json=data)
-        
-        # Log the API response status for debugging
+        st.write(f"Sending request to {url}")
+        response = requests.post(url, files=files, data=data)
         st.write(f"API response status: {response.status_code}")
         
         if response.status_code == 200:
             result = response.json()
-            st.success("Embedding successfully received")
-            return result.get("embedding")
+            st.success("✅ Embedding received successfully")
+            
+            # Look for the embedding in different fields
+            embedding = result.get("embedding")
+            if embedding is None:
+                embedding = result.get("combined_embedding")
+            if embedding is None:
+                embedding = result.get("text_embedding")
+                
+            if embedding:
+                return embedding
+            else:
+                st.error("API returned 200 but no embedding found in response")
+                st.write("Response content:", result)
+                return None
         else:
-            st.error(f"Failed to get embedding: {response.text}")
+            st.error(f"Error getting embedding: {response.status_code}")
+            st.write("Error details:", response.text)
             return None
-    
+            
+    except Exception as e:
+        st.error(f"Exception when getting embedding: {e}")
+        return None
+        
     finally:
-        # Clean up temp file
+        # Close and remove temp file if created
+        if files and "image" in files and hasattr(files["image"], "close"):
+            files["image"].close()
         if temp_file and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
-        
-        # Close any open file handles
-        for f in files.values():
-            if hasattr(f[1], 'close'):
-                f[1].close()
 
 def search_by_vector(embedding, limit=5):
     """Search for claims using vector similarity"""
@@ -506,7 +518,7 @@ def set_text_sample(term):
 def on_search_mode_change():
     # Reset some state variables on mode change
     st.session_state.search_executed = False
-    st.session_state.search_results = None
+    st.session_state.search_results = []
 
 # Callback for submit button
 def on_search_submit():
@@ -518,7 +530,7 @@ def reset_search_state():
     if "search_executed" in st.session_state:
         st.session_state.search_executed = False
     if "search_results" in st.session_state:
-        st.session_state.search_results = None
+        st.session_state.search_results = []
     if "sample_pet_displayed" in st.session_state:
         st.session_state.sample_pet_displayed = False
     if "sample_xray_displayed" in st.session_state:
@@ -629,23 +641,34 @@ def main():
                 query_image = st.file_uploader("Upload a pet photo", type=["jpg", "jpeg", "png"], key="pet_photo_uploader")
             
             with col2:
-                # Sample image selection
-                use_sample = st.checkbox("Use sample pet photo instead", key="use_pet_sample")
+                # Sample image selection - simplified to use a select box
+                sample_options = ["None", "Emma (Goldendoodle)", "Jack (French Bulldog)", "Max (Labrador)", 
+                                  "Otis (Border Collie)", "Rocky (Jack Russell)"]
+                selected_sample = st.selectbox("Or use a sample pet photo:", sample_options, index=0)
                 
-                if use_sample:
-                    sample_image_path = str(PET_PHOTOS_DIR / "emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg")
-                    st.session_state.pet_photo_path = sample_image_path
-                    st.image(sample_image_path, caption="Sample Pet Photo", use_container_width=True)
+                # If a sample is selected, show it
+                if selected_sample != "None":
+                    # Map selection to file path
+                    sample_map = {
+                        "Emma (Goldendoodle)": "emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg",
+                        "Jack (French Bulldog)": "jack_karsten-winegeart-Qb7D1xw28Co-unsplash.jpg",
+                        "Max (Labrador)": "max_alvan-nee-brFsZ7qszSY-unsplash.jpg",
+                        "Otis (Border Collie)": "otis_josh-rakower-zBsXaPEBSeI-unsplash.jpg",
+                        "Rocky (Jack Russell)": "rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg"
+                    }
                     
-                    # Create a BytesIO object for the sample
-                    if st.form_submit_button("Use this sample"):
-                        with open(sample_image_path, "rb") as f:
-                            sample_file_bytes = f.read()
-                        from io import BytesIO
-                        query_image = BytesIO(sample_file_bytes)
-                        query_image.name = os.path.basename(sample_image_path)
-            
-        else:  # X-ray Image
+                    if selected_sample in sample_map:
+                        sample_filename = sample_map[selected_sample]
+                        sample_image_path = str(PET_PHOTOS_DIR / sample_filename)
+                        st.session_state.pet_photo_path = sample_image_path
+                        
+                        if os.path.exists(sample_image_path):
+                            st.image(sample_image_path, caption=f"Sample: {selected_sample}", use_container_width=True)
+                            st.info(f"This sample will be used when you click Search")
+                        else:
+                            st.error(f"Sample image not found: {sample_image_path}")
+
+        elif search_mode_tab == "X-ray Image":
             # X-ray search
             col1, col2 = st.columns([3, 2])
             
@@ -654,21 +677,32 @@ def main():
                 query_image = st.file_uploader("Upload an X-ray image", type=["jpg", "jpeg", "png", "dicom", "dcm"], key="xray_uploader")
             
             with col2:
-                # Sample image selection
-                use_sample = st.checkbox("Use sample X-ray instead", key="use_xray_sample")
+                # Sample image selection - simplified to use a select box
+                sample_options = ["None", "Emma (Chest X-ray)", "Jack (Shoulder X-ray)", "Max (Hip X-ray)", 
+                                  "Otis (Chest X-ray)", "Rocky (Leg X-ray)"]
+                selected_sample = st.selectbox("Or use a sample X-ray:", sample_options, index=0)
                 
-                if use_sample:
-                    sample_image_path = str(XRAYS_DIR / "emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png") 
-                    st.session_state.xray_path = sample_image_path
-                    st.image(sample_image_path, caption="Sample X-ray", use_container_width=True)
+                # If a sample is selected, show it
+                if selected_sample != "None":
+                    # Map selection to file path
+                    sample_map = {
+                        "Emma (Chest X-ray)": "emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png",
+                        "Jack (Shoulder X-ray)": "jack_1.2.410.200028.100.3.20190927.1023440667.730.1.1.png",
+                        "Max (Hip X-ray)": "max_1.2.410.200028.100.3.20190925.1056080334.32610.1.2.png",
+                        "Otis (Chest X-ray)": "otis_1.2.410.200028.100.3.20190926.1008510164.10580.1.2.png",
+                        "Rocky (Leg X-ray)": "rocky_1.2.410.200028.100.3.20190927.1032580692.2539.1.1.png"
+                    }
                     
-                    # Create a BytesIO object for the sample
-                    if st.form_submit_button("Use this sample"):
-                        with open(sample_image_path, "rb") as f:
-                            sample_file_bytes = f.read()
-                        from io import BytesIO
-                        query_image = BytesIO(sample_file_bytes)
-                        query_image.name = os.path.basename(sample_image_path)
+                    if selected_sample in sample_map:
+                        sample_filename = sample_map[selected_sample]
+                        sample_image_path = str(XRAYS_DIR / sample_filename)
+                        st.session_state.xray_path = sample_image_path
+                        
+                        if os.path.exists(sample_image_path):
+                            st.image(sample_image_path, caption=f"Sample: {selected_sample}", use_container_width=True)
+                            st.info(f"This sample will be used when you click Search")
+                        else:
+                            st.error(f"Sample image not found: {sample_image_path}")
         
         # Number of results to return
         num_results = st.slider("Number of results", min_value=1, max_value=10, value=3)
@@ -679,13 +713,52 @@ def main():
     # Handle form submission
     if submit_button:
         with st.spinner("Searching for matching claims..."):
-            if (search_mode_tab in ["Pet Photo", "X-ray Image"] and not query_image) and not text_query:
+            # Prepare search parameters
+            final_text_query = text_query
+            final_image = None
+            
+            # Handle sample images based on the selected tab
+            if search_mode_tab == "Pet Photo" and st.session_state.get("pet_photo_path"):
+                sample_image_path = st.session_state.get("pet_photo_path")
+                if os.path.exists(sample_image_path):
+                    st.write(f"Loading sample pet photo: {os.path.basename(sample_image_path)}")
+                    with open(sample_image_path, "rb") as f:
+                        sample_file_bytes = f.read()
+                    from io import BytesIO
+                    final_image = BytesIO(sample_file_bytes)
+                    final_image.name = os.path.basename(sample_image_path)
+                    st.success(f"Using sample pet photo: {os.path.basename(sample_image_path)}")
+            
+            elif search_mode_tab == "X-ray Image" and st.session_state.get("xray_path"):
+                sample_image_path = st.session_state.get("xray_path")
+                if os.path.exists(sample_image_path):
+                    st.write(f"Loading sample X-ray: {os.path.basename(sample_image_path)}")
+                    with open(sample_image_path, "rb") as f:
+                        sample_file_bytes = f.read()
+                    from io import BytesIO
+                    final_image = BytesIO(sample_file_bytes)
+                    final_image.name = os.path.basename(sample_image_path)
+                    st.success(f"Using sample X-ray: {os.path.basename(sample_image_path)}")
+            
+            # If no sample is selected, use the uploaded image
+            elif query_image is not None:
+                final_image = query_image
+                st.write(f"Using uploaded image: {query_image.name}")
+            
+            # Check if we have valid search parameters
+            if not final_text_query and final_image is None:
                 st.error(f"Please upload a{'n X-ray' if search_mode_tab == 'X-ray Image' else ' pet photo'} or enter search text")
             else:
+                # Perform the search
+                if final_image:
+                    st.write("Searching with image...")
+                if final_text_query:
+                    st.write(f"Searching with text: '{final_text_query}'")
+                    
                 # Search for similar claims
                 results, search_method = search_similar_claims(
-                    query_text=text_query, 
-                    query_image=query_image, 
+                    query_text=final_text_query, 
+                    query_image=final_image, 
                     limit=num_results
                 )
                 
