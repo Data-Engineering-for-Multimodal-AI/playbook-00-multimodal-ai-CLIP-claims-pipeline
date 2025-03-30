@@ -28,6 +28,7 @@ class EmbeddingResponse(BaseModel):
     text_embedding: List[float]
     image_embedding: Optional[List[float]] = None
     combined_embedding: Optional[List[float]] = None
+    embedding: List[float]  # The preferred embedding to use (either combined or text)
 
 @app.get("/")
 def read_root():
@@ -35,11 +36,18 @@ def read_root():
 
 @app.post("/embed", response_model=EmbeddingResponse)
 async def get_embeddings(
-    description: str = Form(...),
+    description: Optional[str] = Form(None),
+    text: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None)
 ):
+    # Use text if provided, otherwise use description
+    input_text = text if text is not None else description
+    
+    if input_text is None:
+        raise HTTPException(status_code=422, detail="Either 'text' or 'description' parameter is required")
+    
     # Process text
-    inputs = processor(text=description, return_tensors="pt", padding=True, truncation=True)
+    inputs = processor(text=input_text, return_tensors="pt", padding=True, truncation=True)
     text_features = model.get_text_features(**inputs)
     text_embedding = text_features.detach().numpy()[0].tolist()
     
@@ -67,7 +75,8 @@ async def get_embeddings(
     return {
         "text_embedding": text_embedding,
         "image_embedding": image_embedding,
-        "combined_embedding": combined_embedding
+        "combined_embedding": combined_embedding,
+        "embedding": combined_embedding if combined_embedding else text_embedding
     }
 
 @app.post("/embed_file")
