@@ -1,0 +1,6 @@
+claim_id,policy_id,pet_name,breed,clinic,xray_covered,surgery_covered,dental_covered,deductible,co_pay_percent
+CLM001,POL-1001,Emma,Goldendoodle,Good Dog Veterinary Clinic,True,True,True,100,15
+CLM002,POL-1002,Jack,French Bulldog,Willow Veterinary Center,True,False,False,110,20
+CLM003,POL-1003,Max,Labrador Retriever,River Valley Veterinary Clinic,True,True,False,120,25
+CLM004,POL-1004,Otis,Border Collie,Pawsitive Pet Care,True,False,True,130,30
+CLM005,POL-1005,Rocky,Jack Russell Terrier,Pinewood Animal Hospital,True,True,False,140,35

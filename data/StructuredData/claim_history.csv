@@ -1,0 +1,26 @@
+claim_id,pet_name,date,type,amount
+CLM001,Emma,2023-01-15,Treatment 1,100
+CLM001,Emma,2023-02-15,Treatment 2,120
+CLM001,Emma,2023-03-15,Treatment 3,140
+CLM001,Emma,2023-04-15,Treatment 4,160
+CLM001,Emma,2023-05-15,Treatment 5,180
+CLM002,Jack,2023-01-15,Treatment 1,105
+CLM002,Jack,2023-02-15,Treatment 2,125
+CLM002,Jack,2023-03-15,Treatment 3,145
+CLM002,Jack,2023-04-15,Treatment 4,165
+CLM002,Jack,2023-05-15,Treatment 5,185
+CLM003,Max,2023-01-15,Treatment 1,110
+CLM003,Max,2023-02-15,Treatment 2,130
+CLM003,Max,2023-03-15,Treatment 3,150
+CLM003,Max,2023-04-15,Treatment 4,170
+CLM003,Max,2023-05-15,Treatment 5,190
+CLM004,Otis,2023-01-15,Treatment 1,115
+CLM004,Otis,2023-02-15,Treatment 2,135
+CLM004,Otis,2023-03-15,Treatment 3,155
+CLM004,Otis,2023-04-15,Treatment 4,175
+CLM004,Otis,2023-05-15,Treatment 5,195
+CLM005,Rocky,2023-01-15,Treatment 1,120
+CLM005,Rocky,2023-02-15,Treatment 2,140
+CLM005,Rocky,2023-03-15,Treatment 3,160
+CLM005,Rocky,2023-04-15,Treatment 4,180
+CLM005,Rocky,2023-05-15,Treatment 5,200
