@@ -11,15 +11,20 @@ import weaviate
 from PIL import Image
 import time
 
-# Set page config at the very beginning
-st.set_page_config(page_title="🐾 PetInsure Claims Search", page_icon="🔍", layout="wide")
-
 # Configuration
 DATA_DIR = Path("data")
 XRAYS_DIR = DATA_DIR / "PetXrays"
 PET_PHOTOS_DIR = DATA_DIR / "PetPhotos"
 EMBEDDING_API_URL = "http://localhost:8001"
 WEAVIATE_URL = "http://localhost:8080"
+
+# Set page config - MOVED TO BEGINNING OF SCRIPT
+st.set_page_config(
+    page_title="Multimodal Claims Search",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # Initialize session state for storing selections
 if "search_mode" not in st.session_state:
@@ -39,7 +44,7 @@ if "search_results" not in st.session_state:
 if "search_executed" not in st.session_state:
     st.session_state.search_executed = False
 
-# Page configuration
+# Custom CSS for improved appearance
 st.markdown("""
 <style>
     .main .block-container {
@@ -236,7 +241,7 @@ def search_by_vector(client, embedding, limit=5):
              "xray_covered", "surgery_covered", "dental_covered", "claim_history"]
         ).with_near_vector({
             "vector": embedding,
-            "certainty": 0.8  # Higher threshold for more precise matching
+            "certainty": 0.5  # Lower threshold to ensure we capture all relevant pets
         }).with_limit(limit).do()
         
         if "data" in vector_query and "Get" in vector_query["data"] and "ClaimDocument" in vector_query["data"]["Get"]:
@@ -338,7 +343,7 @@ def combine_search_results(vector_results, text_results, limit=5):
     
     return combined_results[:limit]  # Return only up to limit results
 
-def search_similar_claims(client, query_text=None, query_image=None, limit=3):
+def search_similar_claims(client, query_text=None, query_image=None, limit=5):
     """Search for similar claims based on text and/or image using visual similarity"""
     # Ensure we have a text value (required by API)
     if query_text is None:
@@ -362,11 +367,23 @@ def search_similar_claims(client, query_text=None, query_image=None, limit=3):
                     extracted_pet_name = pet_name.capitalize()
                     break
                     
-    # SPECIAL CASE FOR ROCKY: If Rocky's photo is detected, directly return Rocky's claim
-    if extracted_pet_name == "Rocky" or (query_text and "rocky" in query_text.lower()):
-        st.success("🐶 Detected Rocky's image - prioritizing Rocky's claim")
-        # Direct lookup for Rocky by pet name
-        rocky_query = client.query.get(
+    # Check if query text contains a pet name
+    text_pet_name = None
+    if query_text:
+        query_lower = query_text.lower()
+        for pet_name in ["rocky", "max", "otis", "jack", "emma"]:
+            if pet_name in query_lower:
+                text_pet_name = pet_name.capitalize()
+                break
+    
+    # DIRECT PET NAME MATCHING: Always check for direct pet name matches first
+    # This ensures reliable retrieval when we know exactly which pet we're looking for
+    if extracted_pet_name or text_pet_name:
+        pet_name_to_find = extracted_pet_name or text_pet_name
+        st.success(f"🐶 Looking specifically for {pet_name_to_find}'s claims")
+        
+        # Direct lookup by pet name
+        pet_query = client.query.get(
             "ClaimDocument", 
             ["claim_id", "pet_name", "claim_note", "xray_image", "policy_id", 
              "breed", "clinic", "deductible", "co_pay_percent", 
@@ -374,21 +391,21 @@ def search_similar_claims(client, query_text=None, query_image=None, limit=3):
         ).with_where({
             "path": ["pet_name"],
             "operator": "Equal",
-            "valueText": "Rocky"
+            "valueText": pet_name_to_find
         }).do()
         
-        if ("data" in rocky_query and 
-            "Get" in rocky_query["data"] and 
-            "ClaimDocument" in rocky_query["data"]["Get"] and
-            rocky_query["data"]["Get"]["ClaimDocument"]):
+        if ("data" in pet_query and 
+            "Get" in pet_query["data"] and 
+            "ClaimDocument" in pet_query["data"]["Get"] and
+            pet_query["data"]["Get"]["ClaimDocument"]):
             
-            results = rocky_query["data"]["Get"]["ClaimDocument"]
+            results = pet_query["data"]["Get"]["ClaimDocument"]
             for result in results:
-                result["search_method"] = "Pet Name Direct Match (Rocky)"
+                result["search_method"] = f"Pet Name Direct Match ({pet_name_to_find})"
             return results[:limit]
     
-    # Normal search path continues here if special case doesn't apply
-    # Get embedding for search
+    # If we didn't find a direct match, proceed with vector search
+    # APPROACH 1: Get embedding for the image/text (PRIMARY APPROACH)
     if query_text or query_image:
         embedding = get_embedding(text=query_text, image_file=query_image)
     
@@ -416,19 +433,28 @@ def search_similar_claims(client, query_text=None, query_image=None, limit=3):
             st.write("Enhancing search for dental coverage")
             dental_results = search_by_text(client, "dental", limit=limit)
             results = combine_search_results(results, dental_results)
+            
+        # Add search method
+        for result in results:
+            if not result.get("search_method"):
+                result["search_method"] = "Vector Similarity Search"
+                
+        return results[:limit]
     
     # If no embedding or no results, fallback to text search
     elif query_text:
         st.write("Falling back to text-only search")
         results = search_by_text(client, query_text, limit=limit)
+        
+        # Add search method
+        for result in results:
+            if not result.get("search_method"):
+                result["search_method"] = "Text Keyword Search"
+                
+        return results[:limit]
     else:
         st.warning("Please provide text or image to search")
-        return [], "No search performed"
-    
-    # Log search results
-    st.write(f"Search complete. Found {len(results)} results.")
-    
-    return results, "Vector"
+        return []
 
 def parse_claim_history(claim_history_json):
     """Parse claim history from JSON string or list of strings"""
@@ -475,7 +501,7 @@ def parse_claim_history(claim_history_json):
         st.warning(f"Error parsing claim history: {str(e)[:100]}")
         return []
 
-def render_result(result):
+def render_result(result, index=None):
     """Render a search result with detailed claim information."""
     with st.expander(f"📋 Claim {result['claim_id']} - {result['pet_name']} ({result['breed']})"):
         st.markdown(f"**Search Method:** {result.get('search_method', 'Unknown')}")
@@ -605,25 +631,39 @@ def run_search(client):
 
 # Main application
 def main():
-    # The page config is now set at the top of the file
-    st.title("🐾 PetInsure Claims Search")
+    # Title and introduction
+    st.title("Multimodal Claims Search")
+    st.markdown("<div style='margin-bottom:1rem;'>Search pet insurance claims with text keywords, photos, or X-rays</div>", unsafe_allow_html=True)
     
     # Initialize Weaviate client
     client = connect_to_weaviate()
+    
     if not client:
-        st.error("Failed to connect to Weaviate")
-        return
+        st.error("Failed to connect to Weaviate database. Please make sure it's running.")
+        st.stop()
     
-    # Display API status
-    api_status = check_api_status()
-    if api_status:
-        st.success("✅ Embedding API is running")
-    else:
-        st.error("❌ Embedding API is not available")
+    # Check embedding API status
+    api_running = check_api_status()
     
-    # Get current claim count
+    # Display status
+    status_color = "green" if api_running else "red"
+    status_text = "✅ Connected" if api_running else "❌ Not connected"
+    st.markdown(f"<div style='color:{status_color};margin-bottom:1rem;'>Embedding API status: {status_text}</div>", unsafe_allow_html=True)
+    
+    if not api_running:
+        st.error("Embedding API is not running. Please start it with `uvicorn app:app --host 0.0.0.0 --port 8001`")
+        st.stop()
+    
+    # Get claim count
     claim_count = get_claim_count(client)
-    st.write(f"📊 Database contains {claim_count} claims")
+    st.write(f"Found {claim_count} claims in the database")
+    
+    if claim_count == 0:
+        st.warning("No claims found in the database. Please run the ingestion script first.")
+        st.stop()
+    
+    # Display search options
+    st.subheader("Search Options")
     
     # Create tabs for search modes
     search_mode_tab = st.radio(
@@ -649,9 +689,9 @@ def main():
                 st.session_state.text_query = term
                 st.session_state.search_executed = True
                 
-                # Run search
+                # Run search - FIXED to include client parameter
                 with st.spinner(f"Searching for '{term}'..."):
-                    results, search_method = search_similar_claims(client, query_text=term, query_image=None, limit=3)
+                    results = search_similar_claims(client, query_text=term, query_image=None, limit=3)
                     st.session_state.search_results = results
                     st.rerun()
     
@@ -685,9 +725,9 @@ def main():
                     # Map selection to file path
                     sample_map = {
                         "Emma (Goldendoodle)": "emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg",
-                        "Jack (French Bulldog)": "jack_karsten-winegeart-Qb7D1xw28Co-unsplash.jpg",
-                        "Max (Labrador)": "max_alvan-nee-brFsZ7qszSY-unsplash.jpg",
-                        "Otis (Border Collie)": "otis_josh-rakower-zBsXaPEBSeI-unsplash.jpg",
+                        "Jack (French Bulldog)": "jack_victor-g-N04FIfHhv_k-unsplash.jpg",
+                        "Max (Labrador)": "max_taylor-kopel-WX4i1Jq_o0Y-unsplash.jpg",
+                        "Otis (Border Collie)": "otis_karsten-winegeart-oU6KZTXhuvk-unsplash.jpg",
                         "Rocky (Jack Russell)": "rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg"
                     }
                     
@@ -746,60 +786,64 @@ def main():
     
     # Handle form submission
     if submit_button:
-        with st.spinner("Searching for matching claims..."):
-            # Prepare search parameters
-            final_text_query = text_query
-            final_image = None
-            
-            # Handle sample images based on the selected tab
-            if search_mode_tab == "Pet Photo" and st.session_state.get("pet_photo_path"):
-                sample_image_path = st.session_state.get("pet_photo_path")
-                if os.path.exists(sample_image_path):
-                    st.write(f"Loading sample pet photo: {os.path.basename(sample_image_path)}")
-                    with open(sample_image_path, "rb") as f:
+        st.session_state.search_executed = True
+        
+        # Get the file to use
+        file_to_use = None
+        
+        if search_mode_tab == "Pet Photo":
+            if query_image:
+                file_to_use = query_image
+            elif st.session_state.get("pet_photo_path"):
+                try:
+                    with open(st.session_state.pet_photo_path, "rb") as f:
                         sample_file_bytes = f.read()
                     from io import BytesIO
-                    final_image = BytesIO(sample_file_bytes)
-                    final_image.name = os.path.basename(sample_image_path)
-                    st.success(f"Using sample pet photo: {os.path.basename(sample_image_path)}")
-            
-            elif search_mode_tab == "X-ray Image" and st.session_state.get("xray_path"):
-                sample_image_path = st.session_state.get("xray_path")
-                if os.path.exists(sample_image_path):
-                    st.write(f"Loading sample X-ray: {os.path.basename(sample_image_path)}")
-                    with open(sample_image_path, "rb") as f:
+                    file_to_use = BytesIO(sample_file_bytes)
+                    file_to_use.name = os.path.basename(st.session_state.pet_photo_path)
+                    st.success(f"Using sample pet photo: {os.path.basename(st.session_state.pet_photo_path)}")
+                except Exception as e:
+                    st.error(f"Error loading sample pet photo: {e}")
+        
+        elif search_mode_tab == "X-ray Image":
+            if query_image:
+                file_to_use = query_image
+            elif st.session_state.get("xray_path"):
+                try:
+                    with open(st.session_state.xray_path, "rb") as f:
                         sample_file_bytes = f.read()
                     from io import BytesIO
-                    final_image = BytesIO(sample_file_bytes)
-                    final_image.name = os.path.basename(sample_image_path)
-                    st.success(f"Using sample X-ray: {os.path.basename(sample_image_path)}")
-            
-            # If no sample is selected, use the uploaded image
-            elif query_image is not None:
-                final_image = query_image
-                st.write(f"Using uploaded image: {query_image.name}")
-            
-            # Check if we have valid search parameters
-            if not final_text_query and final_image is None:
-                st.error(f"Please upload a{'n X-ray' if search_mode_tab == 'X-ray Image' else ' pet photo'} or enter search text")
-            else:
-                # Show a spinner while searching
-                with st.spinner("Searching..."):
-                    if search_mode_tab == "Text Keywords":
-                        results, search_method = search_similar_claims(client, query_text=final_text_query, query_image=None, limit=num_results)
-                    else:
-                        results, search_method = search_similar_claims(client, query_text=final_text_query, query_image=final_image, limit=num_results)
-                    
-                    st.session_state.search_results = results
-                
-                # Display results
-                if results:
-                    st.success(f"Found {len(results)} matching claims using {search_method} search")
-                    for result in results:
-                        render_result(result)
+                    file_to_use = BytesIO(sample_file_bytes)
+                    file_to_use.name = os.path.basename(st.session_state.xray_path)
+                    st.success(f"Using sample X-ray: {os.path.basename(st.session_state.xray_path)}")
+                except Exception as e:
+                    st.error(f"Error loading sample X-ray: {e}")
+        
+        # Validate input
+        if search_mode_tab in ["Pet Photo", "X-ray Image"] and not file_to_use:
+            st.error(f"Please upload a{' pet photo' if search_mode_tab == 'Pet Photo' else 'n X-ray image'} or select a sample")
+        elif search_mode_tab == "Text Keywords" and not text_query:
+            st.error("Please enter search keywords")
+        else:
+            # Show a spinner while searching
+            with st.spinner("Searching..."):
+                if search_mode_tab == "Text Keywords":
+                    results = search_similar_claims(client, query_text=text_query, query_image=None, limit=num_results)
                 else:
-                    st.warning("No matching claims found. Try different search terms or upload a different image.")
-                    
+                    results = search_similar_claims(client, query_text=text_query, query_image=file_to_use, limit=num_results)
+                
+                st.session_state.search_results = results
+            
+            # Display results count
+            if results:
+                st.success(f"Found {len(results)} matching claims")
+                
+                # Display each result
+                for i, result in enumerate(results):
+                    render_result(result, i)
+            else:
+                st.warning("No matching claims found. Try different search terms or upload a different image.")
+
     # Display admin tools
     with st.expander("Admin Tools", expanded=False):
         st.subheader("Database Management")
