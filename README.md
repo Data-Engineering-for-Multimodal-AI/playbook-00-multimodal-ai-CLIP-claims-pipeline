@@ -12,8 +12,6 @@ This system allows insurance claim processors to:
 
 It combines machine learning for visual and text understanding with a vector database for fast similarity search.
 
-![System Architecture](https://mermaid.ink/img/pako:eNp1kk1PwzAMhv9KlBMIaV3XD7QLJ4QEEkJwQBw4JK6JlqYlSVdtqPvvOFvXTnDYKbZfP3lt59SWKtCUdkH7mnPUxBdSo8G1EtYZ5MQ4zsDGcS3rPRpOBGzs_lmBKGvQp4ijB5-uQxw3SoPnZLOUw6eMr0A58hHwcllKKBbQ2KrXjRVEkEJ2YWEhFpBsL8fZRThNhBXxD4G8FaiwK9kRrZr4pEHxdVgrb1RjO-_z5fL6Znl3fxM23ouBXAQE1Yc05A5VEUKT0MYbWCCLfUe0jmkBx5BPx1cXC_p-6dMhzODj-XnFUCzgCcUAzRcMY4SoikVRTpvO4dXTLqzUL2Ij7d4o8-0S4DTnFDx5M1Dp9Xs-6zHfUZ6NNg3qjK8GKnpjTvITlLKBPG-lCpEfj36RyrUbcB2tRVoZe_iHZ7ShMZXYxpLmX5Rnp-lRLYLfJzWj-OTVUgXfYJw1oZ4_Hxl4HzYopLWEqw-Ru73tKWWwM6VwqtZUoBFvKY14gw5zU9JM6I7mLOc9xnOmIJ8vkqnbM-PJDzq9AhQ?type=png)
-
 ## Quick Start
 
 1. **Install Dependencies**
