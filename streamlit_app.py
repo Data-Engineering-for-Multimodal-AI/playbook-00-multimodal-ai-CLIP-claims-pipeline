@@ -21,7 +21,7 @@ WEAVIATE_URL = "http://localhost:8080"
 # Set page config - MOVED TO BEGINNING OF SCRIPT
 st.set_page_config(
     page_title="Multimodal Claims Search",
-    page_icon="🔍",
+    page_icon="::",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -199,7 +199,7 @@ def get_embedding(text=None, image_file=None):
         
         if response.status_code == 200:
             result = response.json()
-            st.success("✅ Embedding received successfully")
+            st.success("Embedding received successfully")
             
             # Look for the embedding in different fields
             embedding = result.get("embedding")
@@ -380,7 +380,7 @@ def search_similar_claims(client, query_text=None, query_image=None, limit=5):
     # This ensures reliable retrieval when we know exactly which pet we're looking for
     if extracted_pet_name or text_pet_name:
         pet_name_to_find = extracted_pet_name or text_pet_name
-        st.success(f"🐶 Looking specifically for {pet_name_to_find}'s claims")
+        st.success(f"Looking specifically for {pet_name_to_find}'s claims")
         
         # Direct lookup by pet name
         pet_query = client.query.get(
@@ -503,7 +503,7 @@ def parse_claim_history(claim_history_json):
 
 def render_result(result, index=None):
     """Render a search result with detailed claim information."""
-    with st.expander(f"📋 Claim {result['claim_id']} - {result['pet_name']} ({result['breed']})"):
+    with st.expander(f"Claim {result['claim_id']} - {result['pet_name']} ({result['breed']})"):
         st.markdown(f"**Search Method:** {result.get('search_method', 'Unknown')}")
         
         # Basic claim info
@@ -521,11 +521,11 @@ def render_result(result, index=None):
         st.markdown("### Coverage")
         cov1, cov2, cov3 = st.columns(3)
         with cov1:
-            st.markdown(f"**X-Ray Coverage:** {'✅' if result['xray_covered'] else '❌'}")
+            st.markdown(f"**X-Ray Coverage:** {'Yes' if result['xray_covered'] else 'No'}")
         with cov2:
-            st.markdown(f"**Surgery Coverage:** {'✅' if result['surgery_covered'] else '❌'}")
+            st.markdown(f"**Surgery Coverage:** {'Yes' if result['surgery_covered'] else 'No'}")
         with cov3:
-            st.markdown(f"**Dental Coverage:** {'✅' if result['dental_covered'] else '❌'}")
+            st.markdown(f"**Dental Coverage:** {'Yes' if result['dental_covered'] else 'No'}")
         
         # Claim description
         st.markdown("### Claim Description")
@@ -647,7 +647,7 @@ def main():
     
     # Display status
     status_color = "green" if api_running else "red"
-    status_text = "✅ Connected" if api_running else "❌ Not connected"
+    status_text = "Connected" if api_running else "Not connected"
     st.markdown(f"<div style='color:{status_color};margin-bottom:1rem;'>Embedding API status: {status_text}</div>", unsafe_allow_html=True)
     
     if not api_running:
@@ -782,7 +782,7 @@ def main():
         num_results = st.slider("Number of results", min_value=1, max_value=10, value=3)
         
         # Submit button
-        submit_button = st.form_submit_button("🔍 Search", use_container_width=True)
+        submit_button = st.form_submit_button("Search", use_container_width=True)
     
     # Handle form submission
     if submit_button:

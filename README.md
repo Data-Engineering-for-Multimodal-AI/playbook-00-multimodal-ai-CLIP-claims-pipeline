@@ -183,7 +183,7 @@ Results:
    - Policy ID: POL-1001
    - Deductible: $100
    - Co-pay: 15%
-   - Dental Coverage: Yes ✅
+   - Dental Coverage: Yes (Covered)
 ```
 
 ### Image-Based Search (X-rays)
@@ -208,7 +208,7 @@ Results:
    
    Policy Details:
    - Policy ID: POL-1003
-   - Surgery Coverage: Yes ✅
+   - Surgery Coverage: Yes (Covered)
 ```
 
 ### Pet Photo Search
@@ -229,8 +229,8 @@ Results:
    Description: Rocky has been limping and showing pain in his back right leg after playing at the dog park.
    Policy Details:
    - Policy ID: POL-1005
-   - X-ray Coverage: Yes ✅
-   - Surgery Coverage: Yes ✅
+   - X-ray Coverage: Yes (Covered)
+   - Surgery Coverage: Yes (Covered)
 ```
 
 ## Testing and Verification
