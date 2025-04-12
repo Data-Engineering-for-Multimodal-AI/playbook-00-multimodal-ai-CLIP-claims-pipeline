@@ -1,6 +1,6 @@
 # Multimodal Claims Pipeline
 
-A multimodal insurance claims processing system that enables intelligent search across X-ray images, text descriptions, and structured policy data.
+A multimodal insurance claims processing system that enables intelligent search across X-ray images, text descriptions, and structured policy data for pet insurance.
 
 ## Overview
 
@@ -10,85 +10,233 @@ This system allows insurance claim processors to:
 - Upload photos of pets to retrieve their claim history
 - Access policy coverage information and claim history in one view
 
-It combines machine learning for visual and text understanding with a vector database for fast similarity search.
+The pipeline uses a CLIP (Contrastive Language-Image Pretraining) model to create embeddings for both text and images, placing them in the same vector space. This enables powerful multimodal search that understands both visual and textual content.
 
-## Quick Start
+## Technical Architecture
 
-1. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+The system consists of four main components:
 
-2. **Run the Full Pipeline**
-   ```bash
-   ./run_pipeline.sh
-   ```
-   This will:
-   - Start Weaviate (or connect to existing instance)
-   - Set up the schema
-   - Start the CLIP embedding API
-   - Ingest sample data
-   - Launch the Streamlit UI
+1. **Embedding API (app.py)**
+   - FastAPI service that generates embeddings from text and images
+   - Uses OpenAI's CLIP model to create joint embedding space
+   - Processes both text descriptions and pet images/X-rays
 
-3. **Access the Interface**
-   - Open [http://localhost:8501](http://localhost:8501) in your browser
+2. **Vector Database (Weaviate)**
+   - Stores claim documents with embeddings
+   - Enables semantic search across text and images
+   - Maintains relationships between claims, policies, and history
 
-## System Components
+3. **Data Ingestion Pipeline (store_with_embedding.py)**
+   - Processes claim notes, X-ray images, and policy data
+   - Extracts embeddings and stores in Weaviate
+   - Links claims with their policy details and history
 
-### 1. Embedding API (app.py)
-- FastAPI service that generates embeddings from text and images
-- Uses CLIP model to create joint embedding space
-- Runs on port 8001 by default
+4. **Search Interface (streamlit_app.py)**
+   - User-friendly interface for multimodal search
+   - Supports uploading images, entering text, or both
+   - Displays search results with policy details and claim history
 
-### 2. Vector Database (Weaviate)
-- Stores claim documents with embeddings
-- Enables semantic search across modalities
-- Runs in Docker on port 8080
+## Prerequisites
 
-### 3. Search Interface (streamlit_app.py)
-- Streamlit app for claim search and exploration
-- Upload images, enter text, or combine both
-- View claim history and policy details
-- Runs on port 8501 by default
+Before you begin, ensure you have the following installed:
 
-### 4. Data Ingestion (store_with_embedding.py)
-- Processes claim notes, images and policy data
-- Extracts embeddings and stores in Weaviate
-- Manages structured data relationships
+- **Python 3.8+**
+- **Docker** - Required for running Weaviate
+- **Git** - For cloning the repository
 
-## Data Organization
+## Setup Instructions
 
-The system expects data to be organized in the following structure:
-```
-data/
-  PetPhotos/           # Pet photos for search
-  PetXrays/            # X-ray images for search 
-  ClaimNotes/          # Text descriptions of claims
-  StructuredData/
-    policy_details.csv # Policy information 
-    claim_history.csv  # Claim history records
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Data-Engineering-for-Multimodal-AI/pb1-mmclaimspipeline.git
+cd pb1-mmclaimspipeline
 ```
 
-## Usage Guide
+### 2. Install Dependencies
 
-### Searching with Text
-1. Enter a symptom, condition, or policy term in the search box
-2. Click "Search" to find similar claims
-3. Explore results showing policy details and history
+```bash
+# Create a virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### Searching with Images
-1. Upload an X-ray image or pet photo
-2. Optionally enter additional text
-3. Click "Search" to find visually similar cases
+# Install required packages
+pip install -r requirements.txt
+```
 
-### Special Case: Pet Search
-The system has special handling for pet searches:
-- Uploading a pet photo while typing its name prioritizes that pet's claims
-- Rocky's claims are consistently found when his photo is uploaded
+### 3. Start Weaviate (Vector Database)
 
-## Testing
+Weaviate runs as a Docker container. The script will start it, but you can also run it manually:
 
-Use the test script to validate search functionality:
+```bash
+docker run -d --name weaviate -p 8080:8080 \
+    --env QUERY_DEFAULTS_LIMIT=25 \
+    --env PERSISTENCE_DATA_PATH="/var/lib/weaviate" \
+    --env AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
+    --env DEFAULT_VECTORIZER_MODULE=none \
+    --restart unless-stopped \
+    semitechnologies/weaviate:1.23.9
+```
+
+You can check if Weaviate is running by visiting http://localhost:8080/v1/.well-known/ready in your browser. It should return `{"status":"OK"}`.
+
+### 4. Run the Pipeline
+
+The easiest way to start all components is with the provided script:
+
+```bash
+# Make sure the script is executable
+chmod +x run_pipeline.sh
+
+# Run the pipeline
+./run_pipeline.sh
+```
+
+This script will:
+1. Start Weaviate if not already running
+2. Set up the Weaviate schema
+3. Start the CLIP embedding API
+4. Ingest the sample claim data
+5. Launch the Streamlit UI
+
+### 5. Access the User Interface
+
+Once the pipeline is running, open http://localhost:8501 in your browser to access the Streamlit interface.
+
+## Expected Output
+
+### When Running run_pipeline.sh
+
+```
+=== Starting Multimodal Claims Pipeline ===
+Checking for required Python packages...
+Dependencies look good. Continuing setup...
+
+Checking if Weaviate is running...
+SUCCESS: Weaviate is already running.
+
+Setting up Weaviate schema...
+Existing schema deleted
+Created schema with ClaimDocument class
+Weaviate schema setup completed.
+
+Starting the CLIP embedding API...
+INFO:     Started server process [28842]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+SUCCESS: Embedding API started successfully!
+
+Ingesting claims data into Weaviate...
+Weaviate is operational
+Existing schema deleted
+Created schema with ClaimDocument class
+Processing claims in data/ClaimNotes...
+Processing claim CLM001...
+Processing claim CLM002...
+Processing claim CLM003...
+Processing claim CLM004...
+Processing claim CLM005...
+SUCCESS: Claims data ingested successfully!
+
+Checking data in Weaviate...
+Found 5 claims in Weaviate
+
+Starting the Streamlit demo app...
+Access the app at http://localhost:8501
+
+Press Ctrl+C to stop the pipeline
+```
+
+### When Starting the Streamlit App
+
+The Streamlit interface will show:
+- A search interface with options for text, image, or combined search
+- Sample buttons for quick demonstrations
+- A clean results view showing matching claims with policy information
+
+## Using the Application
+
+### Text-Based Search
+
+1. Select "Text Keywords" search mode
+2. Type a symptom or condition like "limp", "dental", or "fracture"
+3. Click "Search" to find relevant claims
+4. Results will show matching claims with their:
+   - Pet name and breed
+   - Claim description
+   - Policy details (coverage, deductibles)
+   - Claim history
+
+**Example Output:**
+
+```
+Searching for: "dental issues"
+
+Results:
+1. Claim ID: CLM001
+   Pet: Emma (Goldendoodle)
+   Description: Emma has been experiencing dental issues with plaque buildup and bad breath. Requires dental cleaning and possible extraction.
+   Similarity Score: 0.89
+   
+   Policy Details:
+   - Policy ID: POL-1001
+   - Deductible: $100
+   - Co-pay: 15%
+   - Dental Coverage: Yes ✅
+```
+
+### Image-Based Search (X-rays)
+
+1. Select "X-ray Image" search mode
+2. Upload an X-ray image or use one of the sample images
+3. Optionally add text to refine the search
+4. Click "Search"
+5. Results will show claims with similar X-ray images
+
+**Example Output when searching with an X-ray image:**
+
+```
+Searching with X-ray image
+
+Results:
+1. Claim ID: CLM003
+   Pet: Max (Labrador Retriever) 
+   X-ray Image: [thumbnail shown]
+   Description: Max has a visible fracture in right front leg from jumping off the deck. Need surgery consultation.
+   Similarity Score: 0.78
+   
+   Policy Details:
+   - Policy ID: POL-1003
+   - Surgery Coverage: Yes ✅
+```
+
+### Pet Photo Search
+
+1. Select "Pet Photo" search mode  
+2. Upload a photo of a pet or use a sample photo
+3. Click "Search"
+4. Results will prioritize claims for the specific pet
+
+**Example Output when searching with Rocky's photo:**
+
+```
+Searching with pet photo
+
+Results:
+1. Claim ID: CLM005
+   Pet: Rocky (Jack Russell Terrier)
+   Description: Rocky has been limping and showing pain in his back right leg after playing at the dog park.
+   Policy Details:
+   - Policy ID: POL-1005
+   - X-ray Coverage: Yes ✅
+   - Surgery Coverage: Yes ✅
+```
+
+## Testing and Verification
+
+The repository includes test scripts to verify functionality:
+
 ```bash
 # Test X-ray search
 python test_claims_search.py --xray data/PetXrays/emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png
@@ -98,34 +246,82 @@ python test_claims_search.py --photo data/PetPhotos/rocky_pauline-loroy-U3aF7hgU
 
 # Test text search
 python test_claims_search.py --text "dental"
+
+# Run all tests
+python run_tests.py
+```
+
+## Data Structure
+
+The system uses the following data structure:
+
+```
+data/
+  ClaimNotes/                # Text descriptions of claims (format: CLM001_description.txt)
+  PetXrays/                  # X-ray images for search (format: petname_dicom.png)
+  PetPhotos/                 # Pet photos for search (format: petname_photo.jpg)
+  StructuredData/
+    policy_details.csv       # Policy information
+    claim_history.csv        # Claim history records
 ```
 
 ## Troubleshooting
 
 ### Port Conflicts
-- If port 8001 is in use: Edit the `EMBEDDING_API_PORT` in app.py
-- If port 8501 is in use: Streamlit will automatically try 8502, 8503, etc.
+- If port 8001 is in use: Edit the `EMBEDDING_API_PORT` in run_pipeline.sh
+- If port 8501 is in use: Streamlit will automatically try the next available port (8502, etc.)
 
 ### Embedding API Issues
-- 422 Errors: Ensure your request includes either 'description' or 'image' parameter
-- Connection Errors: Check that the embedding API is running at http://localhost:8001
-
-### Streamlit Performance
-For better Streamlit performance, install Watchdog:
-```bash
-xcode-select --install  # Mac only
-pip install watchdog
-```
+- If you see 422 Errors: Ensure your request includes either 'description' or 'image' parameter
+- If you get Connection Errors: Check that the embedding API is running at http://localhost:8001
 
 ### Weaviate Issues
+- If Weaviate isn't starting: Check Docker is running with `docker ps`
 - If schema reset fails: Run `python weaviate_schema.py` manually
-- No results: Ensure data ingestion completed with `python store_with_embedding.py`
+- If no results appear: Ensure data ingestion completed with `python store_with_embedding.py`
 
-### Claim History Parsing
-If claim history doesn't display correctly:
-- Check that the JSON string format matches expected schema
-- Enable debug toggle in the UI to view raw data format
+### Memory Issues
+- If you encounter memory errors with CLIP model loading:
+  - Close memory-intensive applications
+  - Decrease batch size in app.py if needed
+
+## Extending the System
+
+### Adding New Data
+
+To add new claims:
+
+1. Add claim note files in `data/ClaimNotes/` with format `CLM[ID]_description.txt`
+2. Add X-ray images in `data/PetXrays/` with pet name prefix
+3. Add pet photos in `data/PetPhotos/` with pet name prefix
+4. Update `data/StructuredData/policy_details.csv` with policy information
+5. Update `data/StructuredData/claim_history.csv` with claim history
+6. Run data ingestion: `python store_with_embedding.py`
+
+### Modifying the Schema
+
+To change the data structure:
+
+1. Edit the schema definition in `weaviate_schema.py`
+2. Update the data processing in `store_with_embedding.py`
+3. Update the UI in `streamlit_app.py` to reflect new fields
+
+## Project Details
+
+### Dependencies
+- FastAPI - For the embedding API service
+- Streamlit - For the user interface
+- Weaviate - Vector database for semantic search
+- Transformers/CLIP - For multimodal embeddings
+- PyTorch - Deep learning framework
+- Pandas - Data processing
+
+### Resources
+
+- Weaviate Documentation: https://weaviate.io/developers/weaviate/
+- CLIP Model: https://github.com/openai/CLIP
+- Streamlit Documentation: https://docs.streamlit.io/
 
 ## License
 
-MIT License - see LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details. 
