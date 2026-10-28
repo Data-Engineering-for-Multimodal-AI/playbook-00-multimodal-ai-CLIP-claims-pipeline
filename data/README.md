@@ -1,78 +1,41 @@
-# Sample Data for Multimodal Claims Pipeline
+# Sample data
 
-This directory contains sample data used by the Multimodal Claims Pipeline application. It demonstrates the different types of data the system can process and search.
+Five fictional pet-insurance claims. The pets, owners' notes, vet notes, policies, clinics and claim
+histories are made up; the clinic names are fictional.
 
-## Directory Structure
+| Claim | Pet | Breed | Claim note (`ClaimNotes/`) | Vet note (`VetNotes/`) |
+|---|---|---|---|---|
+| CLM001 | Emma | Goldendoodle | Limping after the park; X-ray of the hip | Reduced weight-bearing, right hind limb; no fracture |
+| CLM002 | Jack | French Bulldog | Slipped on a hardwood floor; feared dislocated shoulder | Discomfort in the front right shoulder; no dislocation |
+| CLM003 | Max | Labrador Retriever | Stiff, hesitant to jump; arthritis or strain? | Reduced mobility in hind limbs; possible early arthritis |
+| CLM004 | Otis | Border Collie | Persistent cough; chest X-ray | Abnormal lung sounds; mild bronchitis suspected |
+| CLM005 | Rocky | Jack Russell Terrier | Fall from the couch | Tenderness near the lumbar spine; soft-tissue injury |
 
-- **ClaimNotes/** - Text descriptions of insurance claims
-- **PetXrays/** - X-ray images for medical claims
-- **PetPhotos/** - Photos of pets for pet identification
-- **PetInvoices/** - Medical invoices related to claims (optional)
-- **VetNotes/** - Veterinarian notes for claims (optional)
-- **StructuredData/** - CSV files with structured policy and claim data
+- `StructuredData/policy_details.csv`: policy, clinic, what it covers, deductible and co-pay per claim.
+- `StructuredData/claim_history.csv`: earlier payments per claim (date, treatment, amount).
+- `PetInvoices/`: one generated invoice image per claim (fictional clinics); not used by the pipeline.
 
-## Sample Data Contents
+## X-rays (`PetXrays/`)
 
-### ClaimNotes
+All five are lateral chest radiographs of dogs; each stands in for its claim's imaging, even where the
+claim is about a hip, shoulder or spine. File names keep the scans' DICOM identifiers. Source: a
+veterinary X-ray dataset on Kaggle; **which dataset, and its license, are still to be confirmed.**
 
-Contains claim descriptions for 5 pets with different medical conditions:
-- CLM001_description.txt - Emma (dental issues)
-- CLM002_description.txt - Jack (digestive issues)
-- CLM003_description.txt - Max (leg fracture)
-- CLM004_description.txt - Otis (eye infection)
-- CLM005_description.txt - Rocky (leg injury)
+## Pet photos (`PetPhotos/`)
 
-### PetXrays
+From [Unsplash](https://unsplash.com) (Unsplash License: free to use, attribution appreciated). The
+photo ID is in each file name:
 
-Contains X-ray images for the pets:
-- emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png
-- jack_1.2.410.200028.100.3.20190927.1023440667.730.1.1.png
-- max_1.2.410.200028.100.3.20190925.1056080334.32610.1.2.png
-- otis_1.2.410.200028.100.3.20190926.1008510164.10580.1.2.png
-- rocky_1.2.410.200028.100.3.20190927.1032580692.2539.1.1.png
+| Pet | Photo by | Unsplash ID |
+|---|---|---|
+| Emma (Goldendoodle) | Brooke Cagle | Ntm4C2lCWxQ |
+| Jack (French Bulldog) | Karsten Winegeart | oU6KZTXhuvk |
+| Max (Labrador Retriever) | Taylor Kopel | WX4i1Jq_o0Y |
+| Otis (Border Collie) | Pauline Loroy | U3aF7hgUSrk |
+| Rocky (Jack Russell Terrier) | Victor G | N04FIfHhv_k |
 
-### PetPhotos
+## Adding claims
 
-Contains photos of the pets:
-- emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg
-- jack_victor-g-N04FIfHhv_k-unsplash.jpg
-- max_taylor-kopel-WX4i1Jq_o0Y-unsplash.jpg
-- otis_karsten-winegeart-oU6KZTXhuvk-unsplash.jpg
-- rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg
-
-### StructuredData
-
-Contains structured data files:
-- **policy_details.csv** - Information about insurance policies including coverage details
-- **claim_history.csv** - Historical claim data with dates, amounts, and outcomes
-
-## Adding Your Own Data
-
-You can extend the system with your own data by following these guidelines:
-
-### Adding New Claims
-
-1. Add a claim note in `ClaimNotes/` with filename format `CLM[ID]_description.txt`
-2. Add corresponding X-ray in `PetXrays/` with pet name prefix
-3. Add pet photo in `PetPhotos/` with pet name prefix
-4. Update `StructuredData/policy_details.csv` with policy information
-5. Update `StructuredData/claim_history.csv` with claim history
-
-### Format Requirements
-
-- **Claim Notes**: Text files with description of the medical condition
-- **X-ray Images**: PNG format, preferably DICOM-exported X-rays
-- **Pet Photos**: JPG format, clear front-facing photos of pets
-- **Policy Details CSV**: Must include all columns from the sample file
-- **Claim History CSV**: Must follow the same format as the sample file
-
-## Data Attribution
-
-The sample pet photos used in this dataset are from Unsplash:
-- "Emma" photo by Brooke Cagle 
-- "Jack" photo by Victor G
-- "Max" photo by Taylor Kopel
-- "Otis" photo by Karsten Winegeart
-- "Rocky" photo by Pauline Loroy
-
-The X-ray images are anonymized sample medical images. 
+Add `ClaimNotes/CLM<ID>_description.txt`, `VetNotes/CLM<ID>_vet_notes.txt`, an X-ray and a photo whose
+file names start with the pet's name in lower case and an underscore, and a row in each CSV. Then
+`python store_with_embedding.py`.

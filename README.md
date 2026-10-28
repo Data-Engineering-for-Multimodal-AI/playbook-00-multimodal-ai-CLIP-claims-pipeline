@@ -1,327 +1,177 @@
-# Multimodal Claims Pipeline
+# Multimodal Claims Search with CLIP and Weaviate
 
-A multimodal insurance claims processing system that enables intelligent search across X-ray images, text descriptions, and structured policy data for pet insurance.
+A companion project for *Data Engineering for Multimodal AI* (O'Reilly, 2026). It isn't printed in the book; it puts Chapter 1's idea (several modalities of one case linked into one searchable record) into a small claims-search system.
+Book: https://oreil.ly/data-engineering-multimodal
 
-## Overview
+> The version before the 2026 update is tagged `first-edition`; see [Differences from the first edition](#differences-from-the-first-edition).
 
-This system allows insurance claim processors to:
-- Search for similar claims using X-ray images
-- Find relevant claims with text descriptions of symptoms
-- Upload photos of pets to retrieve their claim history
-- Access policy coverage information and claim history in one view
+## What you'll build
 
-The pipeline uses a CLIP (Contrastive Language-Image Pretraining) model to create embeddings for both text and images, placing them in the same vector space. This enables powerful multimodal search that understands both visual and textual content.
+Search over five fictional pet-insurance claims, each with a claim note, a vet note, a chest X-ray, a photo of the pet, a policy and a payment history.
 
-## Technical Architecture
+- **One embedding space for text and images.** [CLIP](https://huggingface.co/openai/clip-vit-base-patch32) (ViT-B/32) turns text and images into 512-number vectors, normalized, so that a sentence and a photo it describes are close together.
+- **One record per claim, three vectors.** Weaviate stores each claim with its policy and history as properties and three named vectors: the claim note, the X-ray and the pet photo.
+- **Four ways to search**: by text (claim notes), by describing the pet (text against photos), by X-ray, by pet photo. BM25 keyword search is there for comparison.
+- **A measured evaluation** (`python -m claims.evaluate`) of what works and what doesn't.
+- **A Streamlit app** showing each result's photo, X-ray, notes, coverage and history, and an optional embedding API (FastAPI).
 
-The system consists of four main components:
+What it shows, measured below:
 
-1. **Embedding API (app.py)**
-   - FastAPI service that generates embeddings from text and images
-   - Uses OpenAI's CLIP model to create joint embedding space
-   - Processes both text descriptions and pet images/X-rays
+- **Text-to-image works where CLIP is strong.** "A photo of a French Bulldog" finds Jack's photo; all five breeds are found first.
+- **CLIP is a weak text-to-text matcher.** Matching each vet's note to its claim note, CLIP ranks the right claim first in 1 case of 5, and pulls most queries towards one claim. Plain keyword search does better (3 of 5). A sentence-embedding model would be the better choice for the text vector.
+- **CLIP isn't a medical model.** All five X-rays are chest radiographs, and to CLIP they look alike: a cropped or shrunken X-ray is still found 23 times out of 25, but by appearance, not by diagnosis.
 
-2. **Vector Database (Weaviate)**
-   - Stores claim documents with embeddings
-   - Enables semantic search across text and images
-   - Maintains relationships between claims, policies, and history
+## Quick start
 
-3. **Data Ingestion Pipeline (store_with_embedding.py)**
-   - Processes claim notes, X-ray images, and policy data
-   - Extracts embeddings and stores in Weaviate
-   - Links claims with their policy details and history
-
-4. **Search Interface (streamlit_app.py)**
-   - User-friendly interface for multimodal search
-   - Supports uploading images, entering text, or both
-   - Displays search results with policy details and claim history
-
-## Prerequisites
-
-Before you begin, ensure you have the following installed:
-
-- **Python 3.8+**
-- **Docker** - Required for running Weaviate
-- **Git** - For cloning the repository
-
-## Setup Instructions
-
-### 1. Clone the Repository
+You need Python 3.12 or newer and Docker.
 
 ```bash
-git clone https://github.com/Data-Engineering-for-Multimodal-AI/pb1-mmclaimspipeline.git
-cd pb1-mmclaimspipeline
-```
+git clone https://github.com/Data-Engineering-for-Multimodal-AI/playbook-00-multimodal-ai-CLIP-claims-pipeline.git
+cd playbook-00-multimodal-ai-CLIP-claims-pipeline
 
-### 2. Install Dependencies
-
-```bash
-# Create a virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install required packages
 pip install -r requirements.txt
+
+./run_pipeline.sh          # starts Weaviate, loads the claims, runs the evaluation, opens the app
 ```
 
-### 3. Start Weaviate (Vector Database)
+`./run_pipeline.sh --no-ui` stops after the evaluation. The first run downloads CLIP (600 MB). With [uv](https://docs.astral.sh/uv/): `uv sync`, then `make run`. `docker compose down` stops Weaviate.
 
-Weaviate runs as a Docker container. The script will start it, but you can also run it manually:
+Step by step:
 
 ```bash
-docker run -d --name weaviate -p 8080:8080 \
-    --env QUERY_DEFAULTS_LIMIT=25 \
-    --env PERSISTENCE_DATA_PATH="/var/lib/weaviate" \
-    --env AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
-    --env DEFAULT_VECTORIZER_MODULE=none \
-    --restart unless-stopped \
-    semitechnologies/weaviate:1.23.9
+docker compose up -d --wait weaviate           # Weaviate 1.40.2 on 127.0.0.1:8080 (gRPC 50051)
+python store_with_embedding.py                 # embed and load the claims
+python -m claims.evaluate                      # or: python run_tests.py
+streamlit run streamlit_app.py                 # http://localhost:8501
 ```
 
-You can check if Weaviate is running by visiting http://localhost:8080/v1/.well-known/ready in your browser. It should return `{"status":"OK"}`.
-
-### 4. Run the Pipeline
-
-The easiest way to start all components is with the provided script:
+Searching from the command line (`test_claims_search.py` takes the same options):
 
 ```bash
-# Make sure the script is executable
-chmod +x run_pipeline.sh
-
-# Run the pipeline
-./run_pipeline.sh
+python search_similar_claims.py --text "persistent cough"
+python search_similar_claims.py --describe "a curly-haired dog on a bed"
+python search_similar_claims.py --xray data/PetXrays/<file>.png
+python search_similar_claims.py --photo data/PetPhotos/<file>.jpg
+python search_similar_claims.py --keywords "radiograph shoulder"
 ```
 
-This script will:
-1. Start Weaviate if not already running
-2. Set up the Weaviate schema
-3. Start the CLIP embedding API
-4. Ingest the sample claim data
-5. Launch the Streamlit UI
+The embedding API is optional: `python app.py` serves `POST /embed` (form field `text`, file `image`) on http://127.0.0.1:8001; set `EMBEDDING_API_URL=http://127.0.0.1:8001` and the other scripts use it instead of loading CLIP themselves. Settings are in `.env.example`.
 
-### 5. Access the User Interface
+## Tested on
 
-Once the pipeline is running, open http://localhost:8501 in your browser to access the Streamlit interface.
+| Date | OS | Python | What |
+|---|---|---|---|
+| 2026-10-27 | macOS 26.5.1 (Apple M3) | 3.13.16 | `make smoke` (4 tests, Weaviate in Docker); the Streamlit app, all four modes, with Streamlit's test runner |
+| 2026-10-27 | macOS 26.5.1 (Apple M3) | 3.12.15 | `pip install -r requirements.txt` (63 s), `./run_pipeline.sh --no-ui` (62 s, CLIP already downloaded), the searches below |
+| 2026-10-27 | Ubuntu (GitHub Actions) | 3.12, 3.13 | `make smoke`; `pip install -r requirements.txt`, then `./run_pipeline.sh --no-ui` and the scripts |
 
-## Expected Output
+Versions are pinned in `uv.lock` and `requirements.txt` (weaviate-client 4.24, torch 2.14 (CPU build on Linux), transformers 5.21, Streamlit 1.66).
 
-### When Running run_pipeline.sh
+## Differences from the first edition
 
-```
-=== Starting Multimodal Claims Pipeline ===
-Checking for required Python packages...
-Dependencies look good. Continuing setup...
+| First edition | Now | Why |
+|---|---|---|
+| Weaviate client 3 (`weaviate.Client`), Weaviate 1.23.9 | Client 4 (`connect_to_local`, collections), Weaviate 1.40.2 | The v3 API is removed in client 4 |
+| Ingestion stored `claim_note` and `xray_image`; search asked for `description` and `image_path` | One schema, used by both | The searches failed; the errors were caught and the app fell back to keyword matching |
+| Every claim stored with its text vector only, even when an image was sent | Three named vectors per claim: note, X-ray, photo | X-ray and photo searches compared images with text |
+| `/embed` averaged unnormalized text and image vectors; crashed on transformers 5 | Normalized vectors; text and image returned separately | Fair cosine similarity; current transformers returns an output object |
+| Three pet photos filed under the wrong pets (Jack's file showed a Jack Russell, Otis's a French Bulldog, Rocky's a Border Collie type) | Renamed to match the breeds in the policies | Photo search returned the wrong pet |
+| `data/README.md`: Emma dental, Jack digestive, Max fracture, Otis eye infection | What the notes say (hip, shoulder, hind limbs, cough, lumbar spine) | Accuracy |
+| `run_pipeline.sh` started Weaviate with `docker run` | `docker compose` (Weaviate on 127.0.0.1) | Repeatable, local only |
+| Embedding API on 0.0.0.0; `/embed_file` read any path | 127.0.0.1 by default; files under `data/` only | Not reachable or readable from outside by default |
+| Clone URL `pb1-mmclaimspipeline`, Python 3.8+, unpinned requirements | This repository's URL, Python 3.12+, pinned | |
+| `demo.py`, `simple_test_app.py` and four manual test scripts for the v3 client | Removed; `pytest` and `python -m claims.evaluate` | `test_claims_search.py` and `run_tests.py` still work |
 
-Checking if Weaviate is running...
-SUCCESS: Weaviate is already running.
+Full list: [CHANGELOG.md](CHANGELOG.md).
 
-Setting up Weaviate schema...
-Existing schema deleted
-Created schema with ClaimDocument class
-Weaviate schema setup completed.
+## Data and licenses
 
-Starting the CLIP embedding API...
-INFO:     Started server process [28842]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-SUCCESS: Embedding API started successfully!
+| Data | Source | License |
+|---|---|---|
+| Claim notes, vet notes, policies, claim history, invoices | Made up for this project (fictional pets and clinics) | MIT, like the code |
+| `data/PetPhotos/` (5) | [Unsplash](https://unsplash.com), by Brooke Cagle, Karsten Winegeart, Taylor Kopel, Pauline Loroy and Victor G (IDs in the file names and in [data/README.md](data/README.md)) | Unsplash License |
+| `data/PetXrays/` (5): lateral chest radiographs of dogs | A veterinary X-ray dataset on Kaggle; **which one is still to be confirmed** | To be confirmed with the source |
+| CLIP ViT-B/32 (downloaded on first use) | [openai/clip-vit-base-patch32](https://huggingface.co/openai/clip-vit-base-patch32) | MIT |
 
-Ingesting claims data into Weaviate...
-Weaviate is operational
-Existing schema deleted
-Created schema with ClaimDocument class
-Processing claims in data/ClaimNotes...
-Processing claim CLM001...
-Processing claim CLM002...
-Processing claim CLM003...
-Processing claim CLM004...
-Processing claim CLM005...
-SUCCESS: Claims data ingested successfully!
+## Expected output
 
-Checking data in Weaviate...
-Found 5 claims in Weaviate
+From `./run_pipeline.sh --no-ui` and the searches on 2026-10-27, macOS 26.5.1 (Apple M3), Python 3.12.15, after `pip install -r requirements.txt`. This is the output of this version.
 
-Starting the Streamlit demo app...
-Access the app at http://localhost:8501
-
-Press Ctrl+C to stop the pipeline
-```
-
-### When Starting the Streamlit App
-
-The Streamlit interface will show:
-- A search interface with options for text, image, or combined search
-- Sample buttons for quick demonstrations
-- A clean results view showing matching claims with policy information
-
-## Using the Application
-
-### Text-Based Search
-
-1. Select "Text Keywords" search mode
-2. Type a symptom or condition like "limp", "dental", or "fracture"
-3. Click "Search" to find relevant claims
-4. Results will show matching claims with their:
-   - Pet name and breed
-   - Claim description
-   - Policy details (coverage, deductibles)
-   - Claim history
-
-**Example Output:**
+Loading:
 
 ```
-Searching for: "dental issues"
-
-Results:
-1. Claim ID: CLM001
-   Pet: Emma (Goldendoodle)
-   Description: Emma has been experiencing dental issues with plaque buildup and bad breath. Requires dental cleaning and possible extraction.
-   Similarity Score: 0.89
-   
-   Policy Details:
-   - Policy ID: POL-1001
-   - Deductible: $100
-   - Co-pay: 15%
-   - Dental Coverage: Yes (Covered)
+Loading claims into ClaimDocument (CLIP model openai/clip-vit-base-patch32)...
+  CLM001 Emma   (Goldendoodle): note, X-ray and photo embedded
+  CLM002 Jack   (French Bulldog): note, X-ray and photo embedded
+  CLM003 Max    (Labrador Retriever): note, X-ray and photo embedded
+  CLM004 Otis   (Border Collie): note, X-ray and photo embedded
+  CLM005 Rocky  (Jack Russell Terrier): note, X-ray and photo embedded
+5 claims in Weaviate
 ```
 
-### Image-Based Search (X-rays)
-
-1. Select "X-ray Image" search mode
-2. Upload an X-ray image or use one of the sample images
-3. Optionally add text to refine the search
-4. Click "Search"
-5. Results will show claims with similar X-ray images
-
-**Example Output when searching with an X-ray image:**
+The evaluation (`python -m claims.evaluate`). Top-1: the right claim came first; MRR: mean reciprocal rank.
 
 ```
-Searching with X-ray image
+Test                                 Queries   Top-1    MRR
+vet note -> claim (CLIP text)              5    0.20   0.52
+vet note -> claim (BM25 keywords)          5    0.60   0.60
+breed -> photo (text to image)             5    1.00   1.00
+edited photo -> photo                     25    1.00   1.00
+edited X-ray -> X-ray                     25    0.92   0.95
 
-Results:
-1. Claim ID: CLM003
-   Pet: Max (Labrador Retriever) 
-   X-ray Image: [thumbnail shown]
-   Description: Max has a visible fracture in right front leg from jumping off the deck. Need surgery consultation.
-   Similarity Score: 0.78
-   
-   Policy Details:
-   - Policy ID: POL-1003
-   - Surgery Coverage: Yes (Covered)
+Misses (query: expected -> found first):
+  vet note CLM001: CLM001 -> CLM003 (rank 2)
+  vet note CLM002: CLM002 -> CLM003 (rank 4)
+  vet note CLM004: CLM004 -> CLM003 (rank 2)
+  vet note CLM005: CLM005 -> CLM003 (rank 3)
+  vet note CLM001: CLM001 -> CLM004 (rank not found)
+  vet note CLM005: CLM005 -> CLM004 (rank not found)
+  CLM002 X-ray, shrink to 96 px: CLM002 -> CLM001 (rank 4)
+  CLM004 X-ray, crop 70%: CLM004 -> CLM001 (rank 2)
 ```
 
-### Pet Photo Search
-
-1. Select "Pet Photo" search mode  
-2. Upload a photo of a pet or use a sample photo
-3. Click "Search"
-4. Results will prioritize claims for the specific pet
-
-**Example Output when searching with Rocky's photo:**
+Searches:
 
 ```
-Searching with pet photo
+Searching with text "persistent cough"
 
-Results:
-1. Claim ID: CLM005
-   Pet: Rocky (Jack Russell Terrier)
-   Description: Rocky has been limping and showing pain in his back right leg after playing at the dog park.
-   Policy Details:
-   - Policy ID: POL-1005
-   - X-ray Coverage: Yes (Covered)
-   - Surgery Coverage: Yes (Covered)
+1. CLM004 Otis (Border Collie, Pawsitive Pet Care): similarity 0.783
+    policy POL-1004: covers xray, dental; deductible $130, co-pay 30%; claimed so far $775
+    "Otis developed a persistent cough. Clinic advised a chest X-ray to rule out fluid build-up or lung issues."
+
+2. CLM003 Max (Labrador Retriever, River Valley Veterinary Clinic): similarity 0.711
+    policy POL-1003: covers xray, surgery; deductible $120, co-pay 25%; claimed so far $750
+    "Max seemed stiff and hesitant to jump. Vet visit suggested arthritis or muscle strain. Imaging requested for confirmation."
 ```
 
-## Testing and Verification
+```
+Searching with description "a curly-haired dog on a bed"
 
-The repository includes test scripts to verify functionality:
+1. CLM001 Emma (Goldendoodle, Good Dog Veterinary Clinic): similarity 0.319
+    policy POL-1001: covers xray, surgery, dental; deductible $100, co-pay 15%; claimed so far $700
+    "Emma was limping after playing at the park. We brought her in to rule out a sprain or fracture. The vet recommended an X-ray to check her hip."
 
-```bash
-# Test X-ray search
-python test_claims_search.py --xray data/PetXrays/emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png
-
-# Test pet photo search
-python test_claims_search.py --photo data/PetPhotos/rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg
-
-# Test text search
-python test_claims_search.py --text "dental"
-
-# Run all tests
-python run_tests.py
+2. CLM004 Otis (Border Collie, Pawsitive Pet Care): similarity 0.234
+    policy POL-1004: covers xray, dental; deductible $130, co-pay 30%; claimed so far $775
+    "Otis developed a persistent cough. Clinic advised a chest X-ray to rule out fluid build-up or lung issues."
 ```
 
-## Data Structure
-
-The system uses the following data structure:
-
 ```
-data/
-  ClaimNotes/                # Text descriptions of claims (format: CLM001_description.txt)
-  PetXrays/                  # X-ray images for search (format: petname_dicom.png)
-  PetPhotos/                 # Pet photos for search (format: petname_photo.jpg)
-  StructuredData/
-    policy_details.csv       # Policy information
-    claim_history.csv        # Claim history records
+Searching with X-ray data/PetXrays/otis_1.2.410.200028.100.3.20190926.1008510164.10580.1.2.png
+
+1. CLM004 Otis (Border Collie, Pawsitive Pet Care): similarity 1.000
+    policy POL-1004: covers xray, dental; deductible $130, co-pay 30%; claimed so far $775
+    "Otis developed a persistent cough. Clinic advised a chest X-ray to rule out fluid build-up or lung issues."
+
+2. CLM001 Emma (Goldendoodle, Good Dog Veterinary Clinic): similarity 0.963
+    policy POL-1001: covers xray, surgery, dental; deductible $100, co-pay 15%; claimed so far $700
+    "Emma was limping after playing at the park. We brought her in to rule out a sprain or fracture. The vet recommended an X-ray to check her hip."
 ```
 
-## Troubleshooting
-
-### Port Conflicts
-- If port 8001 is in use: Edit the `EMBEDDING_API_PORT` in run_pipeline.sh
-- If port 8501 is in use: Streamlit will automatically try the next available port (8502, etc.)
-
-### Embedding API Issues
-- If you see 422 Errors: Ensure your request includes either 'description' or 'image' parameter
-- If you get Connection Errors: Check that the embedding API is running at http://localhost:8001
-
-### Weaviate Issues
-- If Weaviate isn't starting: Check Docker is running with `docker ps`
-- If schema reset fails: Run `python weaviate_schema.py` manually
-- If no results appear: Ensure data ingestion completed with `python store_with_embedding.py`
-
-### Memory Issues
-- If you encounter memory errors with CLIP model loading:
-  - Close memory-intensive applications
-  - Decrease batch size in app.py if needed
-
-## Extending the System
-
-### Adding New Data
-
-To add new claims:
-
-1. Add claim note files in `data/ClaimNotes/` with format `CLM[ID]_description.txt`
-2. Add X-ray images in `data/PetXrays/` with pet name prefix
-3. Add pet photos in `data/PetPhotos/` with pet name prefix
-4. Update `data/StructuredData/policy_details.csv` with policy information
-5. Update `data/StructuredData/claim_history.csv` with claim history
-6. Run data ingestion: `python store_with_embedding.py`
-
-### Modifying the Schema
-
-To change the data structure:
-
-1. Edit the schema definition in `weaviate_schema.py`
-2. Update the data processing in `store_with_embedding.py`
-3. Update the UI in `streamlit_app.py` to reflect new fields
-
-## Project Details
-
-### Dependencies
-- FastAPI - For the embedding API service
-- Streamlit - For the user interface
-- Weaviate - Vector database for semantic search
-- Transformers/CLIP - For multimodal embeddings
-- PyTorch - Deep learning framework
-- Pandas - Data processing
-
-### Resources
-
-- Weaviate Documentation: https://weaviate.io/developers/weaviate/
-- CLIP Model: https://github.com/openai/CLIP
-- Streamlit Documentation: https://docs.streamlit.io/
+The X-ray search finds Otis's own X-ray (similarity 1.000), but Emma's chest X-ray is a close second (0.963): to CLIP all five chest radiographs look much alike.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+MIT; see [LICENSE](LICENSE). The photos are under the Unsplash License; see [Data and licenses](#data-and-licenses).
