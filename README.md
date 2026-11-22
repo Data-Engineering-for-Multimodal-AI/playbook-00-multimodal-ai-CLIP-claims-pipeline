@@ -40,7 +40,7 @@ The system consists of four main components:
 
 Before you begin, ensure you have the following installed:
 
-- **Python 3.8+**
+- **Python 3.12+**
 - **Docker** - Required for running Weaviate
 - **Git** - For cloning the repository
 
@@ -66,19 +66,13 @@ pip install -r requirements.txt
 
 ### 3. Start Weaviate (Vector Database)
 
-Weaviate runs as a Docker container. The script will start it, but you can also run it manually:
+Weaviate runs as a Docker container, defined in `docker-compose.yml`. The script will start it, but you can also run it manually:
 
 ```bash
-docker run -d --name weaviate -p 8080:8080 \
-    --env QUERY_DEFAULTS_LIMIT=25 \
-    --env PERSISTENCE_DATA_PATH="/var/lib/weaviate" \
-    --env AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
-    --env DEFAULT_VECTORIZER_MODULE=none \
-    --restart unless-stopped \
-    semitechnologies/weaviate:1.23.9
+docker compose up -d --wait weaviate
 ```
 
-You can check if Weaviate is running by visiting http://localhost:8080/v1/.well-known/ready in your browser. It should return `{"status":"OK"}`.
+You can check if Weaviate is running by visiting http://localhost:8080/v1/.well-known/ready in your browser. It answers with HTTP status 200 when it is ready.
 
 ### 4. Run the Pipeline
 
@@ -242,7 +236,7 @@ The repository includes test scripts to verify functionality:
 python test_claims_search.py --xray data/PetXrays/emma_1.2.410.200028.100.3.20190924.1430080534.21770.1.1.png
 
 # Test pet photo search
-python test_claims_search.py --photo data/PetPhotos/rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg
+python test_claims_search.py --photo data/PetPhotos/rocky_victor-g-N04FIfHhv_k-unsplash.jpg
 
 # Test text search
 python test_claims_search.py --text "dental"
