@@ -1,6 +1,11 @@
-# Multimodal Claims Pipeline
+# Playbook 00: Search pet insurance claims by X-ray, text or photo
+**How to build multimodal search with CLIP.** A companion playbook for [*Data Engineering for Multimodal AI*](https://oreil.ly/data-engineering-multimodal) (O'Reilly, 2026). Not printed in the book.
 
-A multimodal insurance claims processing system that enables intelligent search across X-ray images, text descriptions, and structured policy data for pet insurance.
+A pet insurance claim comes with X-rays, a written description and a policy record, usually kept in different places. In this repo, we explore this with a sample set of pet claims. Follow along to put images and text into one vector space with CLIP, and search claims by X-ray, by symptom description or by a photo of the pet.
+
+**The problem.** Images and text usually live in separate indexes, so you can't search one with the other.
+
+**What you'll work with.** You'll put images and text into one vector space with CLIP, search it, and join the results with structured policy data.
 
 ## Overview
 

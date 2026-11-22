@@ -32,6 +32,7 @@ These fixes are copied from the author's `update-2026` branch (PR #1).
   instead of failing with an import error.
 
 ### Changed
+- README opening: a title that says what you'll do, three sentences on why, the example and what you'll do, then the data engineering problem and what you'll work with.
 - `run_pipeline.sh` starts Weaviate with `docker compose` instead of `docker run`, and takes
   `--no-ui` to stop after loading the claims.
 - `run_tests.py` runs the retrieval evaluation (`python -m claims.evaluate`).
