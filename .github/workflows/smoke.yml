@@ -52,4 +52,4 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           push: never
-          runCmd: make run
+          runCmd: (tail -40 /tmp/dockerd.log; ls -l /usr/sbin/iptables* /etc/alternatives/iptables; docker version) || true; make run
