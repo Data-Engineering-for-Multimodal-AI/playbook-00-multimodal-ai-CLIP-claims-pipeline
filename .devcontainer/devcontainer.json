@@ -6,6 +6,7 @@
   },
   "onCreateCommand": "pip install --no-cache-dir uv==0.13.0",
   "postCreateCommand": "make setup",
+  "postStartCommand": "docker info > /dev/null 2>&1 || (sudo update-alternatives --set iptables /usr/sbin/iptables-nft && sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-nft && /usr/local/share/docker-init.sh && docker info > /dev/null)",
   "forwardPorts": [8001, 8501, 8080],
   "portsAttributes": {
     "8001": { "label": "CLIP embedding API" },
