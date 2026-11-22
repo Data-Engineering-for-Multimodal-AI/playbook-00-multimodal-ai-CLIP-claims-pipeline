@@ -554,6 +554,8 @@ To change the data structure:
 - CLIP Model: https://github.com/openai/CLIP
 - Streamlit Documentation: https://docs.streamlit.io/
 
+If this playbook helped you, a star helps other readers find it.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
