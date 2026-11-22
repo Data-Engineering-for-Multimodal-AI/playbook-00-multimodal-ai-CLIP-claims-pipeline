@@ -66,6 +66,14 @@ def _file_for(folder: Path, pet: str) -> Optional[Path]:
     return matches[0] if matches else None
 
 
+def _stored_path(path: Path) -> str:
+    """Relative to the repository when the file is inside it (the sample), else absolute (your own data)."""
+    try:
+        return str(path.resolve().relative_to(config.ROOT))
+    except ValueError:
+        return str(path.resolve())
+
+
 def load_claims() -> List[Dict]:
     """The sample claims, one record per claim, with the file each vector comes from."""
     policies = pd.read_csv(config.POLICIES)
@@ -79,8 +87,8 @@ def load_claims() -> List[Dict]:
             "policy_id": row["policy_id"],
             "claim_note": (config.CLAIM_NOTES / f"{claim_id}_description.txt").read_text().strip(),
             "vet_note": (config.VET_NOTES / f"{claim_id}_vet_notes.txt").read_text().strip(),
-            "xray_path": str(_file_for(config.XRAYS, pet).relative_to(config.ROOT)),
-            "photo_path": str(_file_for(config.PHOTOS, pet).relative_to(config.ROOT)),
+            "xray_path": _stored_path(_file_for(config.XRAYS, pet)),
+            "photo_path": _stored_path(_file_for(config.PHOTOS, pet)),
             "deductible": float(row["deductible"]), "co_pay_percent": float(row["co_pay_percent"]),
             "xray_covered": bool(row["xray_covered"]), "surgery_covered": bool(row["surgery_covered"]),
             "dental_covered": bool(row["dental_covered"]),

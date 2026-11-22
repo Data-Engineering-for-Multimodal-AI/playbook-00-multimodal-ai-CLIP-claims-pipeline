@@ -5,6 +5,16 @@
 Not printed in the book.
 
 ### Added
+- `make search TEXT=... | DESCRIBE=... | XRAY=... | PHOTO=...` and `make evaluate`.
+- `make check-data DIR=...` and `make load DIR=...` (`scripts/own_claims.py`): check a folder of
+  your own claims in the layout of `data/`, and load it into Weaviate. Tests in
+  `tests/test_own_data.py`; `make smoke` runs `tests/test_claims.py` as before.
+- Three measured experiments, CLIP only, no Docker: `make try-prompts`, `make try-xray-words`,
+  `make try-crowding` (`experiments/`).
+- README: Run it, time tiers, Try this, Use your own data, What you end up with, Before production,
+  What it costs.
+- CI: the Run it steps with checks on their output, the own-data checks, the three experiments, and
+  the time to first output in the devcontainer job.
 - `make setup`, `make run`, `make serve`, `make smoke` and `make clean`. `make run` starts Weaviate,
   loads the five sample claims and prints three searches (text to pet photo, pet photo, X-ray);
   `make serve` starts the embedding API and the Streamlit UI.
@@ -32,6 +42,10 @@ These fixes are copied from the author's `update-2026` branch (PR #1).
   instead of failing with an import error.
 
 ### Changed
+- `claims/store.py` stores image paths outside the repository as absolute paths (needed for
+  `make load`); the sample's paths are unchanged.
+- README: "Overview" is now "How it works"; "Setup Instructions" is now "Run it the way the book
+  does", with the same content.
 - README opening: a title that says what you'll do, three sentences on why, the example and what you'll do, then the data engineering problem and what you'll work with.
 - `run_pipeline.sh` starts Weaviate with `docker compose` instead of `docker run`, and takes
   `--no-ui` to stop after loading the claims.
