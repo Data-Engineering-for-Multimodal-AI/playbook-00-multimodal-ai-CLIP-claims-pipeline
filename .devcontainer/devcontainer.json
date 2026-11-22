@@ -1,0 +1,20 @@
+{
+  "name": "Playbook 00: multimodal claims search with CLIP",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false, "iptablesSwitchAtRuntime": false }
+  },
+  "onCreateCommand": "pip install --no-cache-dir uv==0.13.0",
+  "postCreateCommand": "make setup",
+  "postStartCommand": "docker info > /dev/null 2>&1 || (sudo update-alternatives --set iptables /usr/sbin/iptables-nft && sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-nft && /usr/local/share/docker-init.sh && docker info > /dev/null)",
+  "forwardPorts": [8001, 8501, 8080],
+  "portsAttributes": {
+    "8001": { "label": "CLIP embedding API" },
+    "8501": { "label": "Streamlit search UI" },
+    "8080": { "label": "Weaviate" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] },
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}

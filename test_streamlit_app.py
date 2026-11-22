@@ -1,15 +1,22 @@
 import time
 import os
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
+import sys
+
+# Optional browser test of the Streamlit UI. It needs selenium, webdriver-manager and Chrome,
+# which are not in requirements.txt.
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException, WebDriverException
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.keys import Keys
+except ImportError:
+    sys.exit("test_streamlit_app.py needs selenium and Chrome: pip install selenium webdriver-manager")
 
 # Configure Chrome options
 chrome_options = Options()

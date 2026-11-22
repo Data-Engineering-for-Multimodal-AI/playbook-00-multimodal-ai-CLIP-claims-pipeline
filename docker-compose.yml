@@ -1,0 +1,24 @@
+# Weaviate, the vector database: docker compose up -d --wait weaviate
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.40.2
+    container_name: claims-weaviate
+    ports:
+      - "127.0.0.1:8080:8080"     # REST
+      - "127.0.0.1:50051:50051"   # gRPC (used by the v4 Python client)
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"   # local use only: bound to 127.0.0.1
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none                   # this pipeline supplies its own CLIP vectors
+      CLUSTER_HOSTNAME: node1
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/v1/.well-known/ready || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+volumes:
+  weaviate-data:
