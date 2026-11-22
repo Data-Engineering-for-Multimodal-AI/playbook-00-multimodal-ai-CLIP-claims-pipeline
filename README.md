@@ -239,7 +239,7 @@ This playbook runs five claims on one machine. Before you run something like it 
 | Where you run it | Cost |
 |---|---|
 | Your machine | $0. Everything runs locally: no API keys, no paid services. The clone is about 72 MB; the CLIP model cache took 1.1 GB and the Python environment (`.venv`) another 1.1 GB. |
-| A GitHub Codespace (2 cores, 8 GB, the default size; this repo doesn't ask for more) | Estimated $0.18 per hour at GitHub's list price (November 2026). A free personal account includes 120 core-hours a month, about 60 hours on this machine. |
+| A GitHub Codespace (2 cores, 8 GB, the default size; this repo doesn't ask for more) | Estimated $0.18 per hour at GitHub's list price (November 2026). A free personal account includes 120 core-hours a month, about 60 hours on this machine. In CI, `make run` in a freshly built devcontainer, where `make setup` has already downloaded the model, finished its first search after 44 s. |
 
 ## How it works
 
