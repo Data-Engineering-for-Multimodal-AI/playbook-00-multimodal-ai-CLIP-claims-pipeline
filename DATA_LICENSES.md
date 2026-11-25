@@ -8,8 +8,8 @@ This file lists the datasets and models this playbook uses, where they come from
 |---|---|---|---|
 | Pet photos (5 JPEGs) | [Unsplash](https://unsplash.com). One photo per pet; the photographer and photo ID are in each file name (see Notes) | [Unsplash License](https://unsplash.com/license) | `data/PetPhotos/` (11 MB) |
 | Pet X-rays (5 PNGs) | Not stated | Not stated | `data/PetXrays/` (14 MB) |
-| Claim notes, vet notes, policy and claim history CSVs | Synthetic, made for this playbook | MIT (this repository) | `data/ClaimNotes/`, `data/VetNotes/`, `data/StructuredData/` (48 KB) |
-| Pet invoices (5 PNGs) | Synthetic, made for this playbook | MIT (this repository) | `data/PetInvoices/` (11 MB) |
+| Claim notes, vet notes, policy and claim history CSVs | AI-generated for this playbook. The pets, owners and claims are fictional | MIT (this repository) | `data/ClaimNotes/`, `data/VetNotes/`, `data/StructuredData/` (48 KB) |
+| Pet invoices (5 PNGs) | AI-generated for this playbook. The pets, owners and claims are fictional | MIT (this repository) | `data/PetInvoices/` (11 MB) |
 
 ## Models
 
