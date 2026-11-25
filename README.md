@@ -558,4 +558,6 @@ If this playbook helped you, a star helps other readers find it.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+The datasets and models this playbook uses keep their own licenses. See [DATA_LICENSES.md](DATA_LICENSES.md). 
