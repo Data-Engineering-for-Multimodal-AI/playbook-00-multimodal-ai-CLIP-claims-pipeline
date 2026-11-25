@@ -16,6 +16,7 @@ run: setup
 	uv run --frozen python search_similar_claims.py --describe "a photo of a French Bulldog" --limit 2
 	uv run --frozen python search_similar_claims.py --photo data/PetPhotos/max_taylor-kopel-WX4i1Jq_o0Y-unsplash.jpg --limit 2
 	uv run --frozen python search_similar_claims.py --xray data/PetXrays/rocky_1.2.410.200028.100.3.20190927.1032580692.2539.1.1.png --limit 2
+	@echo "playbook-00-multimodal-ai-CLIP-claims-pipeline" > .playbook-done
 
 # Start Weaviate, load the claims, then the embedding API on http://localhost:8001 and the
 # Streamlit UI on http://localhost:8501. Ctrl+C stops both; make clean stops Weaviate.

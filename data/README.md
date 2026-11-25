@@ -35,10 +35,10 @@ Contains X-ray images for the pets:
 
 Contains photos of the pets:
 - emma_brooke-cagle-Ntm4C2lCWxQ-unsplash.jpg
-- jack_victor-g-N04FIfHhv_k-unsplash.jpg
+- jack_karsten-winegeart-oU6KZTXhuvk-unsplash.jpg
 - max_taylor-kopel-WX4i1Jq_o0Y-unsplash.jpg
-- otis_karsten-winegeart-oU6KZTXhuvk-unsplash.jpg
-- rocky_pauline-loroy-U3aF7hgUSrk-unsplash.jpg
+- otis_pauline-loroy-U3aF7hgUSrk-unsplash.jpg
+- rocky_victor-g-N04FIfHhv_k-unsplash.jpg
 
 ### StructuredData
 
@@ -70,9 +70,9 @@ You can extend the system with your own data by following these guidelines:
 
 The sample pet photos used in this dataset are from Unsplash:
 - "Emma" photo by Brooke Cagle 
-- "Jack" photo by Victor G
+- "Jack" photo by Karsten Winegeart
 - "Max" photo by Taylor Kopel
-- "Otis" photo by Karsten Winegeart
-- "Rocky" photo by Pauline Loroy
+- "Otis" photo by Pauline Loroy
+- "Rocky" photo by Victor G
 
 The X-ray images are anonymized sample medical images. 
