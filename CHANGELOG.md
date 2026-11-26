@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (v1.1.0)
+## v1.1.0 (2026-11-26)
 
 Not printed in the book.
 
@@ -26,6 +26,9 @@ Not printed in the book.
 - CI: Python 3.12 and 3.13 with Weaviate in Docker, the `pip install -r requirements.txt` path,
   a weekly scheduled run, a `make run` step, and a job that builds the devcontainer and runs
   `make run` inside it.
+- `DATA_SOURCES.md`: the datasets and models this playbook uses, with their licenses and citations.
+- `make run` writes `.playbook-done` when it passes (ignored by git). `make card` in the
+  organization's `.github` repository reads these files and draws a completion card.
 
 ### Fixed
 These fixes are copied from the author's `update-2026` branch (PR #1).
@@ -40,6 +43,7 @@ These fixes are copied from the author's `update-2026` branch (PR #1).
   policies.
 - `test_streamlit_app.py` needs selenium, which is not in the requirements. It now says so and exits
   instead of failing with an import error.
+- `data/README.md` listed three pet photos under the wrong file names and credits.
 
 ### Changed
 - `claims/store.py` stores image paths outside the repository as absolute paths (needed for
@@ -53,3 +57,9 @@ These fixes are copied from the author's `update-2026` branch (PR #1).
 - `search_similar_claims.py` and `test_claims_search.py` take `--text`, `--describe`, `--xray`,
   `--photo` and `--keywords`.
 - The Streamlit app is the version from `update-2026` (four search modes).
+- README: a header image (light and dark), badges for CI, Python, license and Codespaces, a diagram at
+  the top of "How it works", and a footer that links the book, all playbooks, and the previous and
+  next playbook.
+- Dependencies: security patch releases (opentelemetry-api 1.45.1 to 1.45.2).
+- The devcontainer picks the iptables backend at build time and falls back to nft when dockerd can't
+  start.
